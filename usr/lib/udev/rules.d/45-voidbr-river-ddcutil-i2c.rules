@@ -1,0 +1,2 @@
+# Brilho de monitor externo pelo ddcutil (DDC/CI): grupo video lê e escreve no i2c
+KERNEL=="i2c-[0-9]*", GROUP="video", MODE="0660"

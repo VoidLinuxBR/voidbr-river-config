@@ -1,11 +1,24 @@
 #!/bin/sh
 # ====================================================================
-# VoidBR River - Abre o River sempre com sessão D-Bus
+# VoidBR River - Abre o River com sessão D-Bus e o ambiente da sessão
 # A entrada "River" do login (Exec=river) acha este script antes do
 # /usr/bin/river, porque /usr/local/bin vem primeiro no PATH (SDDM,
-# greetd com source_profile, TTY). Sem D-Bus não funcionam notificações,
-# bandeja, chaveiro e portais.
+# greetd com source_profile, TTY).
+# As variáveis ficam aqui porque os apps abertos pelo River herdam o
+# ambiente do processo do river (não o do init nem o da sessão).
 # ====================================================================
+export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-river}"
+export XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-river}"
+export XDG_SESSION_TYPE=wayland
+# Apps Qt: Wayland nativo (X11 de reserva) e tema do qt6ct (Tokyo Night)
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-qt6ct}"
+# Firefox, Electron e Java em Wayland
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-auto}"
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+# Sem D-Bus não funcionam notificações, bandeja, chaveiro e portais
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null; then
 	exec dbus-run-session /usr/bin/river "$@"
 fi

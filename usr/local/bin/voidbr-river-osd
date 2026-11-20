@@ -3,6 +3,8 @@
 # VoidBR River - Volume e brilho pelas teclas, com barra na tela (wob)
 # Uso: voidbr-river-osd volume +|-|mudo
 #      voidbr-river-osd brilho +|-
+# Brilho: tela de notebook pelo brightnessctl; sem ela (desktop), monitor
+# externo pelo ddcutil (DDC/CI, código VCP 10).
 # ====================================================================
 SINK=@DEFAULT_AUDIO_SINK@
 STEP=5
@@ -33,11 +35,17 @@ volume)
 	;;
 brilho)
 	case "$2" in
-	+) brightnessctl -q set "${STEP}%+" ;;
-	-) brightnessctl -q set "${STEP}%-" ;;
+	+ | -) ;;
 	*) echo "Uso: $0 brilho +|-"; exit 1 ;;
 	esac
-	mostrar "$(brightnessctl -m | awk -F, '{gsub("%","",$4); print $4}')"
+	if ls /sys/class/backlight/* >/dev/null 2>&1; then
+		brightnessctl -q set "${STEP}%$2"
+		mostrar "$(brightnessctl -m | awk -F, '{gsub("%","",$4); print $4}')"
+	elif command -v ddcutil >/dev/null; then
+		# "VCP 10 C <atual> <máximo>"
+		ddcutil --noverify setvcp 10 "$2" "$STEP" >/dev/null 2>&1
+		mostrar "$(ddcutil --brief getvcp 10 2>/dev/null | awk '$3 == "C" && $5 > 0 {printf "%.0f", $4 * 100 / $5}')"
+	fi
 	;;
 *)
 	echo "Uso: $0 volume +|-|mudo | brilho +|-"

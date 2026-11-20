@@ -27,6 +27,18 @@ riverctl map normal Super L spawn /usr/local/bin/voidbr-river-lock
 # Ajustes do River (VoidBR River Tweaks)
 riverctl map normal Super F1 spawn voidbr-river-tweaks
 
+# Guia de atalhos (Super + / ou Super + ?)
+riverctl map normal Super slash spawn /usr/local/bin/voidbr-river-shortcuts
+riverctl map normal Super+Shift question spawn /usr/local/bin/voidbr-river-shortcuts
+
+# Captura de tela: área, tela inteira, área + anotar
+riverctl map normal None Print spawn '/usr/local/bin/voidbr-river-screenshot regiao'
+riverctl map normal Shift Print spawn '/usr/local/bin/voidbr-river-screenshot tela'
+riverctl map normal Super Print spawn '/usr/local/bin/voidbr-river-screenshot editar'
+
+# Histórico da área de transferência
+riverctl map normal Super V spawn /usr/local/bin/voidbr-river-clipboard
+
 # App launcher
 riverctl map normal Super D spawn fuzzel
 

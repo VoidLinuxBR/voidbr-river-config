@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+# ====================================================================
+# VoidBR River - Guia de atalhos (Super + /)
+# No modelo do voidbr-umbriel-shortcuts, mas lê os atalhos do próprio
+# ~/.config/river/init: o guia mostra sempre o que está configurado.
+# Chamado de novo com o guia aberto, fecha o guia.
+# ====================================================================
+import os
+import re
+import shlex
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk, Gtk  # noqa: E402
+
+INIT = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                    "river", "init")
+
+# comando do init -> (seção, descrição)
+ACOES = {
+    "spawn xfce4-terminal": ("Aplicativos", "Terminal"),
+    "spawn fuzzel": ("Aplicativos", "Abrir aplicativos (fuzzel)"),
+    "spawn thunar": ("Aplicativos", "Gerenciador de arquivos"),
+    "spawn voidbr-river-tweaks": ("Aplicativos", "VoidBR River Tweaks (ajustes)"),
+    "spawn swaync-client -t -sw": ("Aplicativos", "Central de notificações"),
+    "spawn /usr/local/bin/voidbr-river-clipboard": ("Aplicativos", "Histórico da área de transferência"),
+    "spawn /usr/local/bin/voidbr-river-screenshot regiao": ("Captura de tela", "Capturar uma área"),
+    "spawn /usr/local/bin/voidbr-river-screenshot tela": ("Captura de tela", "Capturar a tela inteira"),
+    "spawn /usr/local/bin/voidbr-river-screenshot editar": ("Captura de tela", "Capturar uma área e anotar"),
+    "focus-view next": ("Foco", "Próxima janela"),
+    "focus-view previous": ("Foco", "Janela anterior"),
+    "swap next": ("Mover e redimensionar", "Trocar com a próxima janela"),
+    "swap previous": ("Mover e redimensionar", "Trocar com a janela anterior"),
+    "send-layout-cmd rivertile main-ratio -0.05": ("Mover e redimensionar", "Diminuir a área principal"),
+    "send-layout-cmd rivertile main-ratio +0.05": ("Mover e redimensionar", "Aumentar a área principal"),
+    "move-view": ("Mover e redimensionar", "Mover a janela (arrastar)"),
+    "resize-view": ("Mover e redimensionar", "Redimensionar a janela (arrastar)"),
+    "zoom": ("Janelas", "Tornar a janela principal"),
+    "close": ("Janelas", "Fechar a janela"),
+    "toggle-float": ("Janelas", "Janela flutuante / encaixada"),
+    "toggle-fullscreen": ("Janelas", "Tela cheia"),
+    "spawn /usr/local/bin/voidbr-river-lock": ("Sistema", "Bloquear a tela"),
+    "spawn /usr/local/bin/voidbr-river-power": ("Sistema", "Menu de energia (sair, desligar…)"),
+    "spawn /usr/local/bin/voidbr-river-shortcuts": ("Sistema", "Mostrar ou ocultar este guia"),
+    "exit": ("Sistema", "Sair do River"),
+}
+ORDEM = ["Aplicativos", "Captura de tela", "Foco", "Mover e redimensionar", "Janelas",
+         "Tags (áreas de trabalho)", "Sistema", "Outros"]
+TECLAS = {"BTN_LEFT": "botão esquerdo", "BTN_RIGHT": "botão direito", "BTN_MIDDLE": "botão do meio",
+          "Return": "Enter", "Space": "Espaço", "slash": "/", "question": "?", "Print": "Print"}
+
+CORES = {
+    "background": "#1a1b26", "text": "#c0caf5", "border": "#7aa2f7", "title": "#9ece6a",
+    "section": "#7aa2f7", "key_fg": "#c0caf5", "key_bg": "#24283b", "desc": "#c0caf5",
+    "footer": "#565f89",
+}
+
+
+def ler_atalhos():
+    try:
+        with open(INIT, encoding="utf-8") as f:
+            txt = f.read()
+    except OSError:
+        txt = ""
+    secoes = {s: [] for s in ORDEM}
+    vistos = set()
+    for linha in txt.splitlines():
+        m = re.match(r"\s*riverctl\s+map(-pointer)?\s+normal\s+(\S+)\s+(\S+)\s+(.+)$", linha)
+        if not m or "$" in m.group(3):
+            continue
+        mods, tecla, acao = m.group(2), m.group(3), m.group(4).strip()
+        try:
+            acao = " ".join(shlex.split(acao))
+        except ValueError:
+            pass
+        tecla = TECLAS.get(tecla, tecla)
+        mods = mods.replace("Super", "Mod").replace("+", " + ")
+        combinacao = tecla if mods == "None" else f"{mods} + {tecla}"
+        secao, descr = ACOES.get(acao, ("Outros", acao))
+        if (combinacao, descr) in vistos:
+            continue
+        vistos.add((combinacao, descr))
+        secoes[secao].append((combinacao, descr))
+    if "set-focused-tags" in txt:
+        secoes["Tags (áreas de trabalho)"] += [
+            ("Mod + 1…9", "Ir para a tag 1 a 9"),
+            ("Mod + Shift + 1…9", "Mandar a janela para a tag 1 a 9"),
+        ]
+    return [(s, linhas) for s, linhas in secoes.items() if linhas]
+
+
+def make_css():
+    c = CORES
+    return f"""
+window {{ background: {c["background"]}; color: {c["text"]}; }}
+.cheatsheet {{ background: {c["background"]}; border: 1px solid {c["border"]}; border-radius: 10px; padding: 22px 24px 18px 24px; }}
+.title {{ font-family: monospace; font-size: 16px; font-weight: bold; color: {c["title"]}; margin-bottom: 10px; }}
+.section {{ font-family: monospace; font-size: 12px; font-weight: bold; color: {c["section"]}; margin-top: 5px; margin-bottom: 1px; }}
+.key {{ font-family: monospace; font-size: 11px; color: {c["key_fg"]}; background: {c["key_bg"]}; padding: 1px 5px; border-radius: 4px; }}
+.desc {{ font-family: monospace; font-size: 11px; color: {c["desc"]}; }}
+.footer {{ font-family: monospace; font-size: 11px; color: {c["footer"]}; margin-top: 10px; }}
+""".encode()
+
+
+class Win(Gtk.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title="Atalhos do River")
+        self.set_default_size(860, 600)
+        self.set_resizable(False)
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(make_css())
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        root.add_css_class("cheatsheet")
+        title = Gtk.Label(label="Atalhos do VoidBR River", xalign=0)
+        title.add_css_class("title")
+        root.append(title)
+
+        grid = Gtk.Grid()
+        grid.set_column_spacing(28)
+        grid.set_column_homogeneous(True)
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+
+        secoes = ler_atalhos()
+        # divide as seções em duas colunas com tamanhos parecidos
+        total = sum(len(l) + 2 for _s, l in secoes)
+        soma = 0
+        for titulo, linhas in secoes:
+            coluna = left if soma < total / 2 else right
+            coluna.append(self.make_section(titulo, linhas))
+            soma += len(linhas) + 2
+        if not secoes:
+            left.append(Gtk.Label(label=f"Nenhum atalho encontrado em {INIT}", xalign=0))
+
+        grid.attach(left, 0, 0, 1, 1)
+        grid.attach(right, 1, 0, 1, 1)
+        root.append(grid)
+
+        footer = Gtk.Label(label="Mod = Super · lidos do ~/.config/river/init · "
+                                 "pressione qualquer tecla para fechar", xalign=0)
+        footer.add_css_class("footer")
+        root.append(footer)
+        self.set_child(root)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", lambda *_: (self.close(), True)[1])
+        self.add_controller(keys)
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_: self.close())
+        self.add_controller(click)
+
+    @staticmethod
+    def make_section(title, rows):
+        section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        heading = Gtk.Label(label=title, xalign=0)
+        heading.add_css_class("section")
+        section.append(heading)
+        for key, description in rows:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            key_label = Gtk.Label(label=key, xalign=0)
+            key_label.add_css_class("key")
+            key_label.set_width_chars(max(8, len(key)))
+            desc_label = Gtk.Label(label=description, xalign=0, wrap=True)
+            desc_label.add_css_class("desc")
+            desc_label.set_hexpand(True)
+            row.append(key_label)
+            row.append(desc_label)
+            section.append(row)
+        return section
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.voidbr.RiverShortcuts")
+
+    def do_activate(self):
+        janela = self.props.active_window
+        if janela:  # chamado de novo com o guia aberto: fecha
+            janela.close()
+            return
+        Win(self).present()
+
+
+if __name__ == "__main__":
+    App().run()

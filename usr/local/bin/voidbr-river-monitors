@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+# ====================================================================
+# VoidBR River - Escala automática / Salvar monitores
+# No modelo do umbriel-autoscale, com o kanshi guardando os perfis.
+#
+#   voidbr-river-monitors          (no login) se o conjunto de monitores
+#                                  ligado não tem perfil salvo, aplica escala
+#                                  automática: 2K -> 1.25, 4K -> 2.0
+#   voidbr-river-monitors --save   grava o estado atual (modo, escala,
+#                                  posição, rotação, ligado/desligado) como
+#                                  perfil do kanshi; usado pelo
+#                                  voidbr-river-displays ao fechar o wdisplays
+#   voidbr-river-monitors --tamanho  imprime "LARGURAxALTURA" lógico do
+#                                  primeiro monitor ligado (voidbr-river-power)
+#
+# Os perfis vão para ~/.config/kanshi/config com o nome voidbr_<id>; o
+# resto do arquivo (perfis feitos à mão, comentários) é mantido.
+# ====================================================================
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+KANSHI = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                      "kanshi", "config")
+
+
+def escala_para(largura):
+    if largura >= 3840:
+        return 2.0
+    if largura >= 2560:
+        return 1.25
+    return None
+
+
+def num(v):
+    return str(int(v)) if abs(v - round(v)) < 0.005 else f"{v:.3f}".rstrip("0")
+
+
+def ler_saidas():
+    for _ in range(10):
+        try:
+            res = subprocess.run(["wlr-randr", "--json"], capture_output=True, text=True)
+        except FileNotFoundError:
+            return []
+        if res.returncode == 0 and res.stdout.strip():
+            try:
+                return json.loads(res.stdout)
+            except ValueError:
+                pass
+        time.sleep(0.5)
+    return []
+
+
+def descricao(s):
+    """Critério do kanshi: "fabricante modelo serial" (Unknown no que faltar)."""
+    partes = [(s.get(k) or "Unknown").strip() or "Unknown" for k in ("make", "model", "serial")]
+    return " ".join(partes).replace('"', "")
+
+
+def modo_atual(s):
+    for m in s.get("modes", []):
+        if m.get("current"):
+            return m
+    return None
+
+
+def nome_perfil(saidas):
+    chave = "\n".join(sorted(descricao(s) for s in saidas))
+    return "voidbr_" + hashlib.sha1(chave.encode()).hexdigest()[:8]
+
+
+def ler_kanshi():
+    try:
+        with open(KANSHI, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def bloco(txt, nome):
+    """(início, fim) do bloco "profile <nome> { ... }" no texto, ou None."""
+    m = re.search(r"(?m)^\s*profile\s+" + re.escape(nome) + r"\s*\{", txt)
+    if not m:
+        return None
+    nivel, i = 0, m.end() - 1
+    while i < len(txt):
+        if txt[i] == "{":
+            nivel += 1
+        elif txt[i] == "}":
+            nivel -= 1
+            if nivel == 0:
+                fim = i + 1
+                if txt[fim:fim + 1] == "\n":
+                    fim += 1
+                return m.start(), fim
+        i += 1
+    return None
+
+
+def salvar(saidas):
+    linhas = [f"profile {nome_perfil(saidas)} {{"]
+    for s in saidas:
+        crit = descricao(s)
+        if not s.get("enabled"):
+            linhas.append(f'\toutput "{crit}" disable')
+            continue
+        m = modo_atual(s)
+        partes = ["enable"]
+        if m:
+            partes.append(f"mode {m['width']}x{m['height']}@{m['refresh']:.3f}Hz")
+        pos = s.get("position") or {}
+        partes.append(f"position {pos.get('x', 0)},{pos.get('y', 0)}")
+        partes.append(f"scale {num(float(s.get('scale') or 1.0))}")
+        partes.append(f"transform {s.get('transform') or 'normal'}")
+        linhas.append(f'\toutput "{crit}" ' + " ".join(partes))
+    linhas.append("}")
+    novo = "\n".join(linhas) + "\n"
+
+    txt = ler_kanshi()
+    b = bloco(txt, nome_perfil(saidas))
+    if b:
+        txt = txt[:b[0]] + novo + txt[b[1]:]
+    else:
+        if txt and not txt.endswith("\n"):
+            txt += "\n"
+        if not txt:
+            txt = "# Perfis de monitores - VoidBR River (voidbr-river-monitors --save)\n"
+        txt += "\n" + novo
+    os.makedirs(os.path.dirname(KANSHI), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(KANSHI))
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(txt)
+    os.replace(tmp, KANSHI)
+    subprocess.run(["kanshictl", "reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"Perfil {nome_perfil(saidas)} gravado em {KANSHI}")
+
+
+def autoescala(saidas):
+    if bloco(ler_kanshi(), nome_perfil(saidas)):
+        return  # já tem perfil: o kanshi aplica
+    for s in saidas:
+        m = modo_atual(s)
+        if not s.get("enabled") or not m:
+            continue
+        alvo = escala_para(m["width"])
+        if alvo and abs(float(s.get("scale") or 1.0) - alvo) > 0.01:
+            subprocess.run(["wlr-randr", "--output", s["name"], "--scale", num(alvo)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def tamanho(saidas):
+    for s in saidas:
+        m = modo_atual(s)
+        if s.get("enabled") and m:
+            esc = float(s.get("scale") or 1.0) or 1.0
+            l, a = m["width"], m["height"]
+            if str(s.get("transform", "normal")).endswith(("90", "270")):
+                l, a = a, l
+            print(f"{round(l / esc)}x{round(a / esc)}")
+            return 0
+    return 1
+
+
+def main():
+    saidas = ler_saidas()
+    if not saidas:
+        print("wlr-randr não respondeu (o River está rodando?)", file=sys.stderr)
+        return 1
+    if "--save" in sys.argv:
+        salvar(saidas)
+    elif "--tamanho" in sys.argv:
+        return tamanho(saidas)
+    else:
+        autoescala(saidas)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

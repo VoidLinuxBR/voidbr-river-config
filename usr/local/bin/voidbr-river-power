@@ -5,6 +5,7 @@
 # tela, calcula o tamanho dos botões (~30% da altura) e as margens, e
 # preenche os @MARCADORES@ do ~/.config/wlogout/style.css.
 # Uso: voidbr-river-power [LARGURAxALTURA]
+# Com escala (ex.: 4K em 2.0), usa o tamanho lógico da tela.
 # Chamado de novo com o menu aberto, fecha o menu.
 # ====================================================================
 pkill -x wlogout && exit 0
@@ -14,8 +15,10 @@ CSS_TMP="${XDG_RUNTIME_DIR:-/tmp}/voidbr-wlogout.css"
 BOTOES=5
 ESPACO=24
 
-# Resolução: argumento, ou o modo atual da primeira saída conectada
+# Resolução: argumento; senão o tamanho lógico do primeiro monitor ligado
+# (já com a escala, pelo wlr-randr); senão o modo atual em /sys/class/drm
 res="$1"
+[ -z "$res" ] && res=$(/usr/local/bin/voidbr-river-monitors --tamanho 2>/dev/null)
 if [ -z "$res" ]; then
 	for st in /sys/class/drm/card*-*/status; do
 		[ "$(cat "$st" 2>/dev/null)" = connected ] || continue

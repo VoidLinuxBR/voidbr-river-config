@@ -1,0 +1,8 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Configurar monitores
+# Abre o wdisplays e, ao fechar, grava a configuração como perfil do
+# kanshi (o wdisplays sozinho só vale até o fim da sessão).
+# ====================================================================
+wdisplays "$@"
+exec /usr/local/bin/voidbr-river-monitors --save

@@ -3,7 +3,7 @@
 #
 #   voidbr-river-tweaks
 #   Created: sex 20 nov 2026 12:14:00 -04
-#   Altered: sex 20 nov 2026 12:45:00 -04
+#   Altered: sex 20 nov 2026 13:05:00 -04
 #
 #   Copyright (c) 2026, Vilmar Catafesta <vcatafesta@gmail.com>
 #   Copyright (c) 2026, VoidLinuxBR Team
@@ -23,6 +23,8 @@
 #     voidbr-wallpaper.avif (com a marca d'água do VoidBR).
 #   - v1.2 (2026-11-20): atalho do menu de energia passa a ser o
 #     voidbr-river-power (botões do tamanho da tela).
+#   - v1.3 (2026-11-20): nomes dos atalhos novos (guia, captura de tela,
+#     histórico da área de transferência).
 #
 #   Redistribution and use in source and binary forms, with or without
 #   modification, are permitted provided that the following conditions
@@ -82,7 +84,7 @@ import threading
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib, Gio
 
-VERSAO = "1.2"
+VERSAO = "1.3"
 APP_ID = "org.voidbr.RiverTweaks"
 
 HOME = os.path.expanduser("~")
@@ -106,7 +108,10 @@ PAPEL_EXT = (".avif", ".jpg", ".jpeg", ".png", ".webp", ".svg")
 # arquivos que o "Padrão VoidBR" volta do skel
 ARQ_SKEL = ["river/init", "waybar/config", "waybar/style.css", "fuzzel/fuzzel.ini",
             "wlogout/layout", "wlogout/style.css", "swaync/style.css", "gtklock/config.ini",
-            "gtklock/style.css", "wob/wob.ini", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini"]
+            "gtklock/style.css", "wob/wob.ini", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini",
+            "mimeapps.list", "xfce4/helpers.rc", "Thunar/uca.xml", "qt5ct/qt5ct.conf",
+            "qt5ct/colors/voidbr-tokyonight.conf", "qt6ct/qt6ct.conf",
+            "qt6ct/colors/voidbr-tokyonight.conf"]
 
 # valores do padrão VoidBR (os mesmos do voidbr-river-apply)
 PADRAO = {
@@ -197,6 +202,11 @@ ACOES = {
     "zoom": "Tornar a janela principal",
     "spawn /usr/local/bin/voidbr-river-power": "Menu de energia (sair, desligar…)",
     "spawn swaync-client -t -sw": "Central de notificações",
+    "spawn /usr/local/bin/voidbr-river-shortcuts": "Guia de atalhos",
+    "spawn /usr/local/bin/voidbr-river-screenshot regiao": "Capturar uma área da tela",
+    "spawn /usr/local/bin/voidbr-river-screenshot tela": "Capturar a tela inteira",
+    "spawn /usr/local/bin/voidbr-river-screenshot editar": "Capturar uma área e anotar",
+    "spawn /usr/local/bin/voidbr-river-clipboard": "Histórico da área de transferência",
     "send-layout-cmd rivertile main-ratio -0.05": "Diminuir a área principal",
     "send-layout-cmd rivertile main-ratio +0.05": "Aumentar a área principal",
     "move-view": "Mover a janela (arrastar)",
@@ -414,7 +424,7 @@ def atalhos_do_init():
             pass
         tecla = {"BTN_LEFT": "botão esquerdo", "BTN_RIGHT": "botão direito",
                  "BTN_MIDDLE": "botão do meio", "Return": "Enter",
-                 "Space": "Espaço"}.get(tecla, tecla)
+                 "Space": "Espaço", "slash": "/", "question": "?"}.get(tecla, tecla)
         combinacao = tecla if mods == "None" else f"{mods}+{tecla}"
         atalhos.append((combinacao, ACOES.get(acao, acao)))
     if re.search(r"set-focused-tags", txt):

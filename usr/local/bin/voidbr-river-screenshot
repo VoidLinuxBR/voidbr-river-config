@@ -1,0 +1,41 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Captura de tela (grim + slurp + swappy)
+# Uso: voidbr-river-screenshot regiao   -> escolhe a área com o mouse (Print)
+#      voidbr-river-screenshot tela     -> tela inteira (Shift+Print)
+#      voidbr-river-screenshot editar   -> área + editor para anotar (Super+Print)
+# Salva em ~/Imagens/Capturas (pasta de imagens do xdg-user-dirs) e copia
+# para a área de transferência.
+# ====================================================================
+pasta="$(xdg-user-dir PICTURES 2>/dev/null)"
+[ -n "$pasta" ] && [ "$pasta" != "$HOME" ] || pasta="$HOME/Imagens"
+pasta="$pasta/Capturas"
+mkdir -p "$pasta"
+arquivo="$pasta/Captura_$(date +%Y-%m-%d_%H-%M-%S).png"
+
+avisar() { # avisar <título> <texto> [imagem]
+	command -v notify-send >/dev/null &&
+		notify-send -a voidbr-river-screenshot ${3:+-i "$3"} "$1" "$2"
+}
+
+case "${1:-regiao}" in
+regiao | editar)
+	area="$(slurp -d)" || exit 0 # Esc cancela
+	if [ "$1" = editar ]; then
+		grim -g "$area" - | swappy -f - -o "$arquivo"
+		[ -f "$arquivo" ] || exit 0
+	else
+		grim -g "$area" "$arquivo" || exit 1
+	fi
+	;;
+tela)
+	grim "$arquivo" || exit 1
+	;;
+*)
+	echo "Uso: $0 regiao|tela|editar"
+	exit 1
+	;;
+esac
+
+command -v wl-copy >/dev/null && wl-copy --type image/png <"$arquivo"
+avisar "Captura salva" "${arquivo#"$HOME"/} (copiada para a área de transferência)" "$arquivo"

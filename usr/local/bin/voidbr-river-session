@@ -5,10 +5,16 @@
 # ====================================================================
 WOB_FIFO="${XDG_RUNTIME_DIR:-/tmp}/wob.sock"
 
-# Variáveis da sessão para o D-Bus (portais, apps GTK abertos via D-Bus)
-export XDG_CURRENT_DESKTOP=river XDG_SESSION_DESKTOP=river
+# Variáveis da sessão para o D-Bus (portais, apps GTK abertos via D-Bus).
+# XDG_CURRENT_DESKTOP, QT_* etc. vêm do /usr/local/bin/river.
 dbus-update-activation-environment --all >/dev/null 2>&1 ||
 	dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/null 2>&1
+
+# Monitores: o kanshi aplica os perfis salvos (voidbr-river-displays) e
+# reaplica ao conectar/desconectar; sem perfil, escala automática em 2K/4K
+command -v kanshi >/dev/null && kanshi >/dev/null 2>&1 &
+sleep 0.5
+/usr/local/bin/voidbr-river-monitors >/dev/null 2>&1
 
 # Papel de parede (imagem e modo vêm do VoidBR River Tweaks)
 /usr/local/bin/voidbr-river-apply papel
@@ -66,6 +72,12 @@ fi
 # Inatividade: bloqueia e apaga a tela (tempos do VoidBR River Tweaks);
 # bloqueia também antes de suspender
 /usr/local/bin/voidbr-river-apply inatividade
+
+# Histórico da área de transferência (Super+V): textos e imagens
+if command -v cliphist >/dev/null && command -v wl-paste >/dev/null; then
+	wl-paste --type text --watch cliphist store &
+	wl-paste --type image --watch cliphist store &
+fi
 
 # Bluetooth e rede na bandeja
 # (o blueman só sobe se houver adaptador Bluetooth: sem ele ocupa ~35 MB à toa)

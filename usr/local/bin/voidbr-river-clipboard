@@ -1,0 +1,18 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Histórico da área de transferência (cliphist + fuzzel)
+# Uso: voidbr-river-clipboard           -> escolhe um item e copia (Super+V)
+#      voidbr-river-clipboard limpar    -> apaga o histórico
+# O histórico é gravado pelo voidbr-river-session (wl-paste --watch).
+# ====================================================================
+case "$1" in
+limpar)
+	cliphist wipe
+	command -v notify-send >/dev/null && notify-send "Área de transferência" "Histórico apagado"
+	;;
+*)
+	pkill -x fuzzel && exit 0
+	escolha="$(cliphist list | fuzzel --dmenu --prompt '󰅌  ' --placeholder 'Histórico da área de transferência...' --width 60)" || exit 0
+	[ -n "$escolha" ] && printf '%s' "$escolha" | cliphist decode | wl-copy
+	;;
+esac

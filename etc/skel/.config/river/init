@@ -1,13 +1,43 @@
 #!/bin/sh
 
-# Keyboard layout
-riverctl keyboard-layout us
+# Ambiente para portais/dbus (GTK, xdg-desktop-portal, notificações)
+dbus-update-activation-environment --all 2>/dev/null ||
+	dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river
 
+# Keyboard layout (ABNT2)
+riverctl keyboard-layout -model abnt2 -variant abnt2 br
+
+# Repetição de teclado
+riverctl set-repeat 50 300
+
+# ---------------------------------------------------------------------------
+# Mouse / touchpad
+# ---------------------------------------------------------------------------
+# libinput vem com tap-to-click DESLIGADO por padrão (só afeta touchpads)
+riverctl input 'pointer-*' tap enabled
+riverctl input 'pointer-*' tap-button-map left-right-middle
+riverctl input 'pointer-*' disable-while-typing enabled
+#riverctl input 'pointer-*' natural-scroll enabled
+
+# Foco segue o cursor (opcional; o padrão do River é clique para focar)
+#riverctl focus-follows-cursor normal
+
+# Super + botões do mouse: mover / redimensionar / alternar float
+riverctl map-pointer normal Super BTN_LEFT   move-view
+riverctl map-pointer normal Super BTN_RIGHT  resize-view
+riverctl map-pointer normal Super BTN_MIDDLE toggle-float
+
+# ---------------------------------------------------------------------------
+# Atalhos
+# ---------------------------------------------------------------------------
 # Terminal (XFCE Terminal)
 riverctl map normal Super Return spawn xfce4-terminal
 
 # Close focused window
 riverctl map normal Super Q close
+
+# Sair do River
+riverctl map normal Super+Shift E exit
 
 # App launcher
 riverctl map normal Super D spawn fuzzel
@@ -15,8 +45,36 @@ riverctl map normal Super D spawn fuzzel
 # File manager
 riverctl map normal Super E spawn thunar
 
-# Start status bar
-yambar &
+# Navegação entre janelas
+riverctl map normal Super J focus-view next
+riverctl map normal Super K focus-view previous
+riverctl map normal Super+Shift J swap next
+riverctl map normal Super+Shift K swap previous
 
-# Background color (dark)
-riverctl background-color 0x1e1e2e
+# Float / fullscreen
+riverctl map normal Super Space toggle-float
+riverctl map normal Super F toggle-fullscreen
+
+# Tags (workspaces) 1-9
+for i in $(seq 1 9); do
+	tags=$((1 << (i - 1)))
+	riverctl map normal Super "$i" set-focused-tags "$tags"
+	riverctl map normal Super+Shift "$i" set-view-tags "$tags"
+done
+
+# ---------------------------------------------------------------------------
+# Aparência (Tokyo Night)
+# ---------------------------------------------------------------------------
+riverctl background-color 0x1a1b26
+riverctl border-color-focused 0x7aa2f7
+riverctl border-color-unfocused 0x414868
+
+# ---------------------------------------------------------------------------
+# Barra e layout
+# ---------------------------------------------------------------------------
+# Barra (Waybar)
+waybar &
+
+# Gerador de layout: sem ele o River não arranja as janelas
+riverctl default-layout rivertile
+exec rivertile -view-padding 6 -outer-padding 6

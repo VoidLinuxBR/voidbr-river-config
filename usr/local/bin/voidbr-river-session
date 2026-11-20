@@ -11,8 +11,12 @@ dbus-update-activation-environment --all >/dev/null 2>&1 ||
 	dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/null 2>&1
 
 # Monitores: o kanshi aplica os perfis salvos (voidbr-river-displays) e
-# reaplica ao conectar/desconectar; sem perfil, escala automática em 2K/4K
-command -v kanshi >/dev/null && kanshi >/dev/null 2>&1 &
+# reaplica ao conectar/desconectar; sem perfil, escala automática em 2K/4K.
+# Sem ~/.config/kanshi/config o kanshi encerra na hora: só sobe quando já há
+# perfil salvo (o voidbr-river-monitors --save o inicia na primeira vez).
+if command -v kanshi >/dev/null && [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/kanshi/config" ]; then
+	kanshi >/dev/null 2>&1 &
+fi
 sleep 0.5
 /usr/local/bin/voidbr-river-monitors >/dev/null 2>&1
 

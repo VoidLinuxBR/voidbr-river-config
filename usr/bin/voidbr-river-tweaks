@@ -3,7 +3,7 @@
 #
 #   voidbr-river-tweaks
 #   Created: sex 20 nov 2026 12:14:00 -04
-#   Altered: sex 20 nov 2026 12:14:00 -04
+#   Altered: sex 20 nov 2026 12:37:00 -04
 #
 #   Copyright (c) 2026, Vilmar Catafesta <vcatafesta@gmail.com>
 #   Copyright (c) 2026, VoidLinuxBR Team
@@ -19,6 +19,8 @@
 #     foco), Papel de parede (voidbr-wallpapers ou imagem própria, modo),
 #     Teclado, mouse e atalhos, e Energia (bloqueio e tela apagada).
 #     Botões Aplicar, Padrão VoidBR e Padrão River.
+#   - v1.1 (2026-11-20): papel de parede padrão passa a ser o
+#     voidbr-wallpaper.avif (com a marca d'água do VoidBR).
 #
 #   Redistribution and use in source and binary forms, with or without
 #   modification, are permitted provided that the following conditions
@@ -78,7 +80,7 @@ import threading
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib, Gio
 
-VERSAO = "1.0"
+VERSAO = "1.1"
 APP_ID = "org.voidbr.RiverTweaks"
 
 HOME = os.path.expanduser("~")
@@ -96,7 +98,7 @@ APPLY = "/usr/local/bin/voidbr-river-apply"
 ESCALA_MIN, ESCALA_MAX = 0.7, 2.0
 
 PAPEL_PASTA = "/usr/share/backgrounds"
-PAPEL_VOIDBR = "/usr/share/backgrounds/voidbr/voidbr-tokyonight.png"
+PAPEL_VOIDBR = "/usr/share/backgrounds/voidbr/voidbr-wallpaper.avif"
 PAPEL_EXT = (".avif", ".jpg", ".jpeg", ".png", ".webp", ".svg")
 
 # arquivos que o "Padrão VoidBR" volta do skel

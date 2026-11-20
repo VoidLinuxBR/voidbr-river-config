@@ -32,7 +32,7 @@ TWEAKS="${XDG_CONFIG_HOME:-$HOME/.config}/river/voidbr-tweaks.sh"
 : "${VOIDBR_GAP:=6}"
 : "${VOIDBR_MAIN_LOCATION:=left}"
 : "${VOIDBR_MAIN_RATIO:=0.55}"
-: "${VOIDBR_WALL:=$HOME/.local/share/backgrounds/current.png}"
+: "${VOIDBR_WALL:=/usr/share/backgrounds/voidbr/voidbr-wallpaper.avif}"
 : "${VOIDBR_WALL_MODE:=fill}"
 : "${VOIDBR_LOCK_MIN:=5}"
 : "${VOIDBR_SCREEN_OFF_MIN:=10}"
@@ -74,13 +74,12 @@ aplicar_layout() {
 }
 
 aplicar_papel() {
-	# Sem wallpaper escolhido ainda: usa o padrão do VoidBR
-	padrao="$HOME/.local/share/backgrounds/current.png"
-	if [ "$VOIDBR_WALL" = "$padrao" ] && [ ! -e "$padrao" ]; then
-		for img in /usr/share/backgrounds/voidbr/voidbr-tokyonight.png /usr/share/backgrounds/voidbr/voidbr.png; do
+	# Imagem escolhida não existe mais (pacote removido etc.): volta ao padrão do VoidBR
+	if [ ! -f "$VOIDBR_WALL" ]; then
+		for img in /usr/share/backgrounds/voidbr/voidbr-wallpaper.avif \
+			/usr/share/backgrounds/voidbr/voidbr-tokyonight.png; do
 			if [ -f "$img" ]; then
-				mkdir -p "$(dirname "$padrao")"
-				ln -sf "$img" "$padrao"
+				VOIDBR_WALL="$img"
 				break
 			fi
 		done

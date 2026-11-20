@@ -1,0 +1,129 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Aplica os ajustes do voidbr-river-tweaks
+# Lê ~/.config/river/voidbr-tweaks.sh (só variáveis VOIDBR_*); o que
+# não estiver lá usa o padrão VoidBR.
+# Uso: voidbr-river-apply river        -> teclado, mouse, bordas, cores, foco
+#      voidbr-river-apply layout       -> reinicia o rivertile com o espaço/área nova
+#      voidbr-river-apply papel        -> (re)inicia o papel de parede (swaybg)
+#      voidbr-river-apply inatividade  -> (re)inicia o swayidle com os tempos novos
+#      voidbr-river-apply barra        -> recarrega a Waybar
+#      voidbr-river-apply tudo         -> tudo acima
+#      voidbr-river-apply args         -> imprime as opções do rivertile
+# ====================================================================
+TWEAKS="${XDG_CONFIG_HOME:-$HOME/.config}/river/voidbr-tweaks.sh"
+# shellcheck disable=SC1090
+[ -r "$TWEAKS" ] && . "$TWEAKS"
+
+: "${VOIDBR_KB_LAYOUT:=br}"
+: "${VOIDBR_KB_VARIANT=abnt2}"   # vazio = sem variante (ex.: us)
+: "${VOIDBR_KB_MODEL:=abnt2}"
+: "${VOIDBR_REPEAT_RATE:=50}"
+: "${VOIDBR_REPEAT_DELAY:=300}"
+: "${VOIDBR_TAP:=enabled}"
+: "${VOIDBR_NATURAL_SCROLL:=disabled}"
+: "${VOIDBR_POINTER_ACCEL:=0}"
+: "${VOIDBR_FOCUS_FOLLOWS:=disabled}"
+: "${VOIDBR_ATTACH:=top}"
+: "${VOIDBR_CURSOR:=Nordic-cursors}"
+: "${VOIDBR_CURSOR_SIZE:=24}"
+: "${VOIDBR_BORDER_WIDTH:=2}"
+: "${VOIDBR_ACCENT:=7aa2f7}"
+: "${VOIDBR_GAP:=6}"
+: "${VOIDBR_MAIN_LOCATION:=left}"
+: "${VOIDBR_MAIN_RATIO:=0.55}"
+: "${VOIDBR_WALL:=$HOME/.local/share/backgrounds/current.png}"
+: "${VOIDBR_WALL_MODE:=fill}"
+: "${VOIDBR_LOCK_MIN:=5}"
+: "${VOIDBR_SCREEN_OFF_MIN:=10}"
+
+aplicar_river() {
+	if [ -n "$VOIDBR_KB_VARIANT" ]; then
+		riverctl keyboard-layout -model "$VOIDBR_KB_MODEL" -variant "$VOIDBR_KB_VARIANT" "$VOIDBR_KB_LAYOUT"
+	else
+		riverctl keyboard-layout -model "$VOIDBR_KB_MODEL" "$VOIDBR_KB_LAYOUT"
+	fi
+	riverctl set-repeat "$VOIDBR_REPEAT_RATE" "$VOIDBR_REPEAT_DELAY"
+
+	riverctl input 'pointer-*' tap "$VOIDBR_TAP"
+	riverctl input 'pointer-*' tap-button-map left-right-middle
+	riverctl input 'pointer-*' disable-while-typing enabled
+	riverctl input 'pointer-*' natural-scroll "$VOIDBR_NATURAL_SCROLL"
+	riverctl input 'pointer-*' pointer-accel "$VOIDBR_POINTER_ACCEL"
+	riverctl focus-follows-cursor "$VOIDBR_FOCUS_FOLLOWS"
+	riverctl default-attach-mode "$VOIDBR_ATTACH"
+
+	riverctl xcursor-theme "$VOIDBR_CURSOR" "$VOIDBR_CURSOR_SIZE"
+
+	riverctl background-color 0x1a1b26
+	riverctl border-width "$VOIDBR_BORDER_WIDTH"
+	riverctl border-color-focused "0x$VOIDBR_ACCENT"
+	riverctl border-color-unfocused 0x414868
+	riverctl border-color-urgent 0xf7768e
+}
+
+args_rivertile() {
+	echo "-view-padding $VOIDBR_GAP -outer-padding $VOIDBR_GAP" \
+		"-main-location $VOIDBR_MAIN_LOCATION -main-ratio $VOIDBR_MAIN_RATIO"
+}
+
+aplicar_layout() {
+	pkill -u "$(id -u)" -x rivertile
+	# shellcheck disable=SC2046
+	riverctl spawn "rivertile $(args_rivertile)"
+}
+
+aplicar_papel() {
+	# Sem wallpaper escolhido ainda: usa o padrão do VoidBR
+	padrao="$HOME/.local/share/backgrounds/current.png"
+	if [ "$VOIDBR_WALL" = "$padrao" ] && [ ! -e "$padrao" ]; then
+		for img in /usr/share/backgrounds/voidbr/voidbr-tokyonight.png /usr/share/backgrounds/voidbr/voidbr.png; do
+			if [ -f "$img" ]; then
+				mkdir -p "$(dirname "$padrao")"
+				ln -sf "$img" "$padrao"
+				break
+			fi
+		done
+	fi
+	pkill -u "$(id -u)" -x swaybg
+	command -v swaybg >/dev/null &&
+		setsid -f swaybg -i "$VOIDBR_WALL" -m "$VOIDBR_WALL_MODE" >/dev/null 2>&1
+}
+
+aplicar_inatividade() {
+	pkill -u "$(id -u)" -x swayidle
+	command -v swayidle >/dev/null || return 0
+	set -- -w
+	if [ "$VOIDBR_LOCK_MIN" -gt 0 ] 2>/dev/null; then
+		set -- "$@" timeout $((VOIDBR_LOCK_MIN * 60)) /usr/local/bin/voidbr-river-lock
+	fi
+	if [ "$VOIDBR_SCREEN_OFF_MIN" -gt 0 ] 2>/dev/null; then
+		set -- "$@" timeout $((VOIDBR_SCREEN_OFF_MIN * 60)) 'wlopm --off "*"' resume 'wlopm --on "*"'
+	fi
+	set -- "$@" lock /usr/local/bin/voidbr-river-lock before-sleep /usr/local/bin/voidbr-river-lock
+	setsid -f swayidle "$@" >/dev/null 2>&1
+}
+
+aplicar_barra() {
+	pkill -USR2 -u "$(id -u)" -x waybar
+}
+
+case "${1:-tudo}" in
+river) aplicar_river ;;
+layout) aplicar_layout ;;
+papel) aplicar_papel ;;
+inatividade) aplicar_inatividade ;;
+barra) aplicar_barra ;;
+args) args_rivertile ;;
+tudo)
+	aplicar_river
+	aplicar_layout
+	aplicar_papel
+	aplicar_inatividade
+	aplicar_barra
+	;;
+*)
+	echo "Uso: $0 river|layout|papel|inatividade|barra|tudo|args"
+	exit 1
+	;;
+esac

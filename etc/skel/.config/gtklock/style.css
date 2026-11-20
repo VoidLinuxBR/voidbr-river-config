@@ -1,0 +1,46 @@
+/* VoidBR River - gtklock (Tokyo Night) */
+/* A imagem de fundo vem do config.ini (background=), escolhida no VoidBR River Tweaks */
+window {
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: #1a1b26;
+}
+
+#clock-label {
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 72px;
+    font-weight: bold;
+    color: #c0caf5;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+#date-label {
+    font-size: 18px;
+    color: #7dcfff;
+}
+
+#input-field {
+    min-width: 280px;
+    padding: 8px 14px;
+    border-radius: 14px;
+    border: 2px solid rgba(122, 162, 247, 0.5);
+    background-color: rgba(26, 27, 38, 0.85);
+    color: #c0caf5;
+}
+
+#input-field:focus {
+    border-color: #7aa2f7;
+}
+
+#unlock-button {
+    border-radius: 14px;
+    background: #7aa2f7;
+    color: #1a1b26;
+    font-weight: bold;
+}
+
+#error-label,
+#warning-label {
+    color: #f7768e;
+}

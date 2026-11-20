@@ -1,0 +1,46 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Volume e brilho pelas teclas, com barra na tela (wob)
+# Uso: voidbr-river-osd volume +|-|mudo
+#      voidbr-river-osd brilho +|-
+# ====================================================================
+SINK=@DEFAULT_AUDIO_SINK@
+STEP=5
+WOB_FIFO="${XDG_RUNTIME_DIR:-/tmp}/wob.sock"
+
+mostrar() { # mostrar <porcentagem> [estilo]
+	[ -p "$WOB_FIFO" ] && echo "$*" >"$WOB_FIFO"
+}
+
+volume_atual() {
+	# "Volume: 0.45" ou "Volume: 0.45 [MUTED]"
+	wpctl get-volume "$SINK" | awk '{printf "%.0f", $2 * 100}'
+}
+
+case "$1" in
+volume)
+	case "$2" in
+	+) wpctl set-mute "$SINK" 0; wpctl set-volume -l 1.0 "$SINK" "${STEP}%+" ;;
+	-) wpctl set-volume "$SINK" "${STEP}%-" ;;
+	mudo) wpctl set-mute "$SINK" toggle ;;
+	*) echo "Uso: $0 volume +|-|mudo"; exit 1 ;;
+	esac
+	if wpctl get-volume "$SINK" | grep -q MUTED; then
+		mostrar "$(volume_atual)" muted
+	else
+		mostrar "$(volume_atual)"
+	fi
+	;;
+brilho)
+	case "$2" in
+	+) brightnessctl -q set "${STEP}%+" ;;
+	-) brightnessctl -q set "${STEP}%-" ;;
+	*) echo "Uso: $0 brilho +|-"; exit 1 ;;
+	esac
+	mostrar "$(brightnessctl -m | awk -F, '{gsub("%","",$4); print $4}')"
+	;;
+*)
+	echo "Uso: $0 volume +|-|mudo | brilho +|-"
+	exit 1
+	;;
+esac

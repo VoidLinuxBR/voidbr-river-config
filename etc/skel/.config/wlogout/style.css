@@ -1,0 +1,46 @@
+/* VoidBR River - wlogout (Tokyo Night) */
+* {
+    background-image: none;
+    box-shadow: none;
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans", sans-serif;
+}
+
+window {
+    background-color: rgba(26, 27, 38, 0.88);
+}
+
+button {
+    color: #c0caf5;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: rgba(36, 40, 59, 0.85);
+    border: 2px solid rgba(122, 162, 247, 0.25);
+    border-radius: 24px;
+    margin: 220px 12px;
+    background-repeat: no-repeat;
+    background-position: center 38%;
+    background-size: 28%;
+    transition: all 0.2s ease;
+}
+
+button:focus,
+button:hover {
+    background-color: rgba(122, 162, 247, 0.22);
+    border-color: #7aa2f7;
+    outline-style: none;
+}
+
+#lock:hover,     #lock:focus     { border-color: #7dcfff; }
+#logout:hover,   #logout:focus   { border-color: #bb9af7; }
+#suspend:hover,  #suspend:focus  { border-color: #9ece6a; }
+#reboot:hover,   #reboot:focus   { border-color: #e0af68; }
+#shutdown:hover, #shutdown:focus {
+    border-color: #f7768e;
+    background-color: rgba(247, 118, 142, 0.22);
+}
+
+#lock     { background-image: image(url("/usr/share/wlogout/icons/lock.png"),     url("/usr/local/share/wlogout/icons/lock.png")); }
+#logout   { background-image: image(url("/usr/share/wlogout/icons/logout.png"),   url("/usr/local/share/wlogout/icons/logout.png")); }
+#suspend  { background-image: image(url("/usr/share/wlogout/icons/suspend.png"),  url("/usr/local/share/wlogout/icons/suspend.png")); }
+#reboot   { background-image: image(url("/usr/share/wlogout/icons/reboot.png"),   url("/usr/local/share/wlogout/icons/reboot.png")); }
+#shutdown { background-image: image(url("/usr/share/wlogout/icons/shutdown.png"), url("/usr/local/share/wlogout/icons/shutdown.png")); }

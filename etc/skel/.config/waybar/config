@@ -19,16 +19,20 @@
     "network",
     "cpu",
     "memory",
+    "backlight",
     "battery",
+    "group/indicators",
     "tray",
+    "custom/notification",
     "custom/power"
   ],
   // Menu de aplicativos (fuzzel)
   "custom/menu": {
     "format": "  VoidBR",
     "tooltip": true,
-    "tooltip-format": "Menu de Aplicativos (Super + D)",
-    "on-click": "pkill -x fuzzel || fuzzel"
+    "tooltip-format": "Clique: aplicativos (Super + D)\nDireito: VoidBR River Tweaks (Super + F1)",
+    "on-click": "pkill -x fuzzel || fuzzel",
+    "on-click-right": "voidbr-river-tweaks"
   },
   // Tags do River: clique = ir para a tag | clique-direito = mostrar junto
   "river/tags": {
@@ -102,11 +106,62 @@
     "icon-size": 16,
     "spacing": 8
   },
-  // Sair / Suspender / Reiniciar / Desligar (fuzzel em modo dmenu + elogind)
+  "backlight": {
+    "format": "{icon} {percent}%",
+    "format-icons": ["󰃞", "󰃟", "󰃠"],
+    "tooltip-format": "Brilho da tela\nScroll: ajustar",
+    "on-scroll-up": "/usr/local/bin/voidbr-river-osd brilho +",
+    "on-scroll-down": "/usr/local/bin/voidbr-river-osd brilho -"
+  },
+  "group/indicators": {
+    "orientation": "inherit",
+    "modules": ["custom/nightlight", "idle_inhibitor"]
+  },
+  // Luz noturna (wlsunset)
+  "custom/nightlight": {
+    "exec": "/usr/local/bin/voidbr-river-nightlight",
+    "return-type": "json",
+    "interval": 30,
+    "signal": 9,
+    "on-click": "/usr/local/bin/voidbr-river-nightlight toggle"
+  },
+  // "Café": impede o swayidle de bloquear/apagar a tela
+  "idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": {
+      "activated": "",
+      "deactivated": "󰛊"
+    },
+    "tooltip-format-activated": "Manter acordado: ATIVADO",
+    "tooltip-format-deactivated": "Manter acordado: desligado"
+  },
+  // Central de notificações (swaync): clique abre o painel, direito = não perturbe
+  "custom/notification": {
+    "tooltip": true,
+    "tooltip-format": "Notificações (Super + N)\nDireito: não perturbe",
+    "format": "{icon}",
+    "format-icons": {
+      "notification": "󱅫",
+      "none": "󰂜",
+      "dnd-notification": "󰂠",
+      "dnd-none": "󰪓",
+      "inhibited-notification": "󰂛",
+      "inhibited-none": "󰪑",
+      "dnd-inhibited-notification": "󰂛",
+      "dnd-inhibited-none": "󰪑"
+    },
+    "return-type": "json",
+    "exec-if": "which swaync-client",
+    "exec": "swaync-client -swb",
+    "on-click": "swaync-client -t -sw",
+    "on-click-right": "swaync-client -d -sw",
+    "escape": true
+  },
+  // Menu de energia em tela cheia (wlogout) - Super + Shift + E
   "custom/power": {
     "format": " 󰐥 ",
     "tooltip": true,
-    "tooltip-format": "Sair / Suspender / Reiniciar / Desligar",
-    "on-click": "pkill -x fuzzel || case $(printf '󰍃 Sair\\n󰒲 Suspender\\n󰜉 Reiniciar\\n󰐥 Desligar' | fuzzel --dmenu --lines 4 --prompt 'Energia: ') in *Sair) riverctl exit ;; *Suspender) loginctl suspend ;; *Reiniciar) loginctl reboot ;; *Desligar) loginctl poweroff ;; esac"
+    "tooltip-format": "Bloquear / Sair / Suspender / Reiniciar / Desligar (Super + Shift + E)",
+    "on-click": "pkill -x wlogout || wlogout -b 5"
   }
 }

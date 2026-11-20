@@ -1,0 +1,7 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Bloqueio de tela (gtklock)
+# Não abre um segundo bloqueio se já houver um ativo.
+# ====================================================================
+pgrep -x gtklock >/dev/null && exit 0
+exec gtklock -d

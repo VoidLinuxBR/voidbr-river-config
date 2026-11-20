@@ -1,0 +1,22 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Luz noturna (wlsunset) para a Waybar
+# Uso: voidbr-river-nightlight          -> estado em JSON
+#      voidbr-river-nightlight toggle   -> liga/desliga
+# Horário fixo (06:30 - 18:30), sem depender de localização.
+# ====================================================================
+if [ "$1" = toggle ]; then
+	if pgrep -x wlsunset >/dev/null; then
+		pkill -x wlsunset
+	else
+		setsid -f wlsunset -S 06:30 -s 18:30 -t 4000 -T 6500 >/dev/null 2>&1
+	fi
+	pkill -RTMIN+9 waybar
+	exit 0
+fi
+
+if pgrep -x wlsunset >/dev/null; then
+	printf '{"text":"󰖔","class":"on","tooltip":"Luz noturna: ligada (18:30 - 06:30)\\nClique para desligar"}\n'
+else
+	printf '{"text":"󰖙","class":"off","tooltip":"Luz noturna: desligada\\nClique para ligar"}\n'
+fi

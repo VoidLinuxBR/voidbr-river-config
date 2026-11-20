@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# ====================================================================
+# VoidBR River - Serviços da sessão (chamado pelo ~/.config/river/init)
+# Papel de parede, barra, notificações, OSD, inatividade, bandeja
+# ====================================================================
+WOB_FIFO="${XDG_RUNTIME_DIR:-/tmp}/wob.sock"
+
+# Variáveis da sessão para o D-Bus (portais, apps GTK abertos via D-Bus)
+export XDG_CURRENT_DESKTOP=river XDG_SESSION_DESKTOP=river
+dbus-update-activation-environment --all >/dev/null 2>&1 ||
+	dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP >/dev/null 2>&1
+
+# Papel de parede (imagem e modo vêm do VoidBR River Tweaks)
+/usr/local/bin/voidbr-river-apply papel
+
+# Tema GTK, ícones, cursor e fonte (apps GTK4/libadwaita leem do gsettings)
+if command -v gsettings >/dev/null; then
+	gsettings set org.gnome.desktop.interface gtk-theme 'Tokyonight-Dark-Theme'
+	gsettings set org.gnome.desktop.interface icon-theme 'Tokyonight-Dark-Icons'
+	gsettings set org.gnome.desktop.interface cursor-theme 'Nordic-cursors'
+	gsettings set org.gnome.desktop.interface cursor-size 24
+	gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+	gsettings set org.gnome.desktop.interface font-name 'Noto Sans 10'
+fi >/dev/null 2>&1
+
+# Áudio: o pipewire sobe pelo base.conf. Quando o pipewire.conf.d tem o
+# wireplumber e o pipewire-pulse, o próprio pipewire os inicia; senão, sobem aqui.
+pw_conf_d() {
+	for f in /etc/pipewire/pipewire.conf.d/*"$1"* /usr/share/pipewire/pipewire.conf.d/*"$1"* \
+		"$HOME"/.config/pipewire/pipewire.conf.d/*"$1"*; do
+		[ -e "$f" ] && return 0
+	done
+	return 1
+}
+for _ in $(seq 20); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break; sleep 0.1; done
+for svc in wireplumber pipewire-pulse; do
+	pw_conf_d "$svc" || pgrep -u "$USER" -x "$svc" >/dev/null || "$svc" &
+done
+
+# Chaveiro de senhas (o PAM do login já o abriu com a senha do usuário)
+command -v gnome-keyring-daemon >/dev/null &&
+	gnome-keyring-daemon --start --components=secrets >/dev/null 2>&1
+
+# Agente polkit (senha de administrador para apps gráficos)
+for agent in /usr/libexec/polkit-mate-authentication-agent-1 \
+	/usr/lib/mate-polkit/polkit-mate-authentication-agent-1 /usr/libexec/xfce-polkit; do
+	if [ -x "$agent" ]; then
+		"$agent" &
+		break
+	fi
+done
+
+# Notificações (painel lateral, não perturbe)
+command -v swaync >/dev/null && swaync &
+
+# Barra
+command -v waybar >/dev/null && waybar &
+
+# OSD de volume/brilho: o voidbr-river-osd escreve no FIFO, o wob mostra
+if command -v wob >/dev/null; then
+	rm -f "$WOB_FIFO"
+	mkfifo "$WOB_FIFO"
+	tail -f "$WOB_FIFO" | wob &
+fi
+
+# Inatividade: bloqueia e apaga a tela (tempos do VoidBR River Tweaks);
+# bloqueia também antes de suspender
+/usr/local/bin/voidbr-river-apply inatividade
+
+# Bluetooth e rede na bandeja
+# (o blueman só sobe se houver adaptador Bluetooth: sem ele ocupa ~35 MB à toa)
+if command -v blueman-applet >/dev/null && ls /sys/class/bluetooth/hci* >/dev/null 2>&1; then
+	blueman-applet &
+fi
+command -v nm-applet >/dev/null && nm-applet --indicator &
+
+wait

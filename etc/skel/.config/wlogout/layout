@@ -1,0 +1,30 @@
+{
+    "label" : "lock",
+    "action" : "/usr/local/bin/voidbr-river-lock",
+    "text" : "Bloquear",
+    "keybind" : "b"
+}
+{
+    "label" : "logout",
+    "action" : "riverctl exit",
+    "text" : "Sair",
+    "keybind" : "s"
+}
+{
+    "label" : "suspend",
+    "action" : "loginctl suspend",
+    "text" : "Suspender",
+    "keybind" : "u"
+}
+{
+    "label" : "reboot",
+    "action" : "loginctl reboot",
+    "text" : "Reiniciar",
+    "keybind" : "r"
+}
+{
+    "label" : "shutdown",
+    "action" : "loginctl poweroff",
+    "text" : "Desligar",
+    "keybind" : "d"
+}

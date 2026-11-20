@@ -1,0 +1,27 @@
+/* VoidBR River - SwayNotificationCenter (Tokyo Night)
+ * Parte do estilo padrão do swaync e troca só as variáveis de cor/canto. */
+@import url("/etc/xdg/swaync/style.css");
+
+:root {
+  --cc-bg: rgba(26, 27, 38, 0.94);
+
+  --noti-border-color: rgba(122, 162, 247, 0.35);
+  --noti-bg: 36, 40, 59;
+  --noti-bg-alpha: 0.95;
+  --noti-bg-darker: rgb(22, 22, 30);
+  --noti-bg-hover: rgb(41, 46, 66);
+  --noti-bg-focus: rgba(122, 162, 247, 0.20);
+  --noti-close-bg: rgb(65, 72, 104);
+  --noti-close-bg-hover: rgb(247, 118, 142);
+
+  --text-color: rgb(192, 202, 245);
+  --text-color-disabled: rgb(86, 95, 137);
+
+  --bg-selected: rgb(122, 162, 247);
+
+  --border-radius: 14px;
+}
+
+* {
+  font-family: "Noto Sans", "Symbols Nerd Font";
+}

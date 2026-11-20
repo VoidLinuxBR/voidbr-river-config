@@ -130,3 +130,28 @@ tooltip {
 #custom-power {
     color: @red;
 }
+
+/* Brilho, indicadores e notificações */
+#backlight,
+#custom-nightlight,
+#idle_inhibitor,
+#custom-notification {
+    padding: 0 10px;
+    margin: 4px 2px;
+    border-radius: 12px;
+    background: alpha(@bg3, 0.6);
+}
+
+#backlight            { color: @yellow; }
+#custom-nightlight.on { color: @yellow; }
+#custom-nightlight.off,
+#idle_inhibitor.deactivated { color: @fg_dim; }
+#idle_inhibitor.activated   { color: @green; }
+#custom-notification        { color: @accent; }
+
+#backlight:hover,
+#custom-nightlight:hover,
+#idle_inhibitor:hover,
+#custom-notification:hover {
+    background: alpha(@accent, 0.3);
+}

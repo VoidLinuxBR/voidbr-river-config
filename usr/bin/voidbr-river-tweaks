@@ -1,0 +1,1164 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+#   voidbr-river-tweaks
+#   Created: sex 20 nov 2026 12:14:00 -04
+#   Altered: sex 20 nov 2026 12:14:00 -04
+#
+#   Copyright (c) 2026, Vilmar Catafesta <vcatafesta@gmail.com>
+#   Copyright (c) 2026, VoidLinuxBR Team
+#   Assembled By Vilmar Catafesta for the VoidBR project.
+#   All rights reserved.
+#
+#   ChangeLog:
+#   - v1.0 (2026-11-20): Versão inicial — GTK4 + PyGObject, no modelo do
+#     voidbr-enlightenment-tweaks, do voidbr-gnome-tweaks e do
+#     voidbr-xfce-tweaks. Abas Barra (posição, altura, ilha ou colada,
+#     módulos da Waybar), Aparência (tema GTK, ícones, cursor, cor e
+#     largura da borda), Janelas (área principal, espaço entre janelas,
+#     foco), Papel de parede (voidbr-wallpapers ou imagem própria, modo),
+#     Teclado, mouse e atalhos, e Energia (bloqueio e tela apagada).
+#     Botões Aplicar, Padrão VoidBR e Padrão River.
+#
+#   Redistribution and use in source and binary forms, with or without
+#   modification, are permitted provided that the following conditions
+#   are met:
+#   1. Redistributions of source code must retain the above copyright
+#      notice, this list of conditions and the following disclaimer.
+#   2. Redistributions in binary form must reproduce the above copyright
+#      notice, this list of conditions and the following disclaimer in the
+#      documentation and/or other materials provided with the distribution.
+#
+#   THIS SOFTWARE IS PROVIDED BY Vilmar Catafesta ''AS IS'' AND ANY EXPRESS OR
+#   IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+#   OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+#   NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+#   THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+##############################################################################
+"""
+VoidBR River Tweaks - ajustes do River do VoidBR (barra, aparência, janelas,
+papel de parede, teclado, mouse e energia) sem abrir arquivo de configuração.
+
+Requer: PyGObject (GTK4).
+    sudo xbps-install -S python3-gobject gtk4
+
+Como aplica sem mexer no init do usuário:
+    O app grava só variáveis (VOIDBR_*) em ~/.config/river/voidbr-tweaks.sh.
+    O /usr/local/bin/voidbr-river-apply lê esse arquivo e aplica no River:
+    o init o chama no login e o app o chama ao clicar em Aplicar, então as
+    mudanças valem na hora, sem sair da sessão. Os atalhos continuam no init.
+
+O que o app altera (sempre no usuário atual):
+    ~/.config/river/voidbr-tweaks.sh          teclado, mouse, bordas, layout,
+                                              papel de parede, inatividade
+    ~/.config/waybar/config e style.css       posição, altura e módulos da barra
+    ~/.config/gtk-3.0/settings.ini (e 4.0)    tema GTK, ícones, cursor
+    ~/.config/gtklock/config.ini              tema e imagem da tela de bloqueio
+    ~/.config/voidbr/river-tweaks.json        valores do app e fonte do próprio app
+"""
+
+import gi
+import configparser
+import datetime
+import glob
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import threading
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk, GLib, Gio
+
+VERSAO = "1.0"
+APP_ID = "org.voidbr.RiverTweaks"
+
+HOME = os.path.expanduser("~")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+PREFS_APP = os.path.join(CONFIG, "voidbr", "river-tweaks.json")
+TWEAKS_SH = os.path.join(CONFIG, "river", "voidbr-tweaks.sh")
+RIVER_INIT = os.path.join(CONFIG, "river", "init")
+WAYBAR_CFG = os.path.join(CONFIG, "waybar", "config")
+WAYBAR_CSS = os.path.join(CONFIG, "waybar", "style.css")
+FUZZEL_INI = os.path.join(CONFIG, "fuzzel", "fuzzel.ini")
+GTKLOCK_CFG = os.path.join(CONFIG, "gtklock", "config.ini")
+SKEL = "/etc/skel/.config"
+EXEMPLO_RIVER = "/usr/share/examples/river/init"
+APPLY = "/usr/local/bin/voidbr-river-apply"
+ESCALA_MIN, ESCALA_MAX = 0.7, 2.0
+
+PAPEL_PASTA = "/usr/share/backgrounds"
+PAPEL_VOIDBR = "/usr/share/backgrounds/voidbr/voidbr-tokyonight.png"
+PAPEL_EXT = (".avif", ".jpg", ".jpeg", ".png", ".webp", ".svg")
+
+# arquivos que o "Padrão VoidBR" volta do skel
+ARQ_SKEL = ["river/init", "waybar/config", "waybar/style.css", "fuzzel/fuzzel.ini",
+            "wlogout/layout", "wlogout/style.css", "swaync/style.css", "gtklock/config.ini",
+            "gtklock/style.css", "wob/wob.ini", "gtk-3.0/settings.ini", "gtk-4.0/settings.ini"]
+
+# valores do padrão VoidBR (os mesmos do voidbr-river-apply)
+PADRAO = {
+    "barra_posicao": "top",
+    "barra_altura": 38,
+    "barra_estilo": "ilha",
+    "modulos": {"player": True, "volume": True, "rede": True, "sistema": True, "brilho": True,
+                "bateria": True, "indicadores": True, "bandeja": True, "notificacoes": True},
+    "gtk_tema": "Tokyonight-Dark-Theme",
+    "icones": "Tokyonight-Dark-Icons",
+    "cursor": "Nordic-cursors",
+    "cursor_tamanho": 24,
+    "destaque": "7aa2f7",
+    "borda": 2,
+    "espaco": 6,
+    "area_lugar": "left",
+    "area_proporcao": 55,
+    "foco": "disabled",
+    "novas": "top",
+    "papel": PAPEL_VOIDBR,
+    "papel_modo": "fill",
+    "papel_bloqueio": True,
+    "teclado": "br|abnt2|abnt2",
+    "repeticao_taxa": 50,
+    "repeticao_atraso": 300,
+    "toque": True,
+    "rolagem_natural": False,
+    "velocidade": 0,
+    "bloquear_min": 5,
+    "apagar_min": 10,
+}
+NOMES = [k for k in PADRAO]
+
+POSICOES_BARRA = [("top", "Em cima"), ("bottom", "Embaixo")]
+ESTILOS_BARRA = [("ilha", "Ilha VoidBR (flutuante, cantos arredondados)"),
+                 ("colada", "Colada na borda (largura toda, sem cantos)")]
+# módulos opcionais da direita da barra (chave, módulos da Waybar, título, dica)
+MODULOS_BARRA = [
+    ("player", ["mpris"], "Player de mídia", "música/vídeo tocando (some sozinho sem player)"),
+    ("volume", ["wireplumber"], "Volume", "clique abre o mixer, direito tira o som"),
+    ("rede", ["network"], "Rede", "Wi-Fi ou cabo; clique abre as conexões"),
+    ("sistema", ["cpu", "memory"], "CPU e memória", "clique abre o htop"),
+    ("brilho", ["backlight"], "Brilho da tela", "só aparece em notebooks"),
+    ("bateria", ["battery"], "Bateria", "só aparece em notebooks"),
+    ("indicadores", ["group/indicators"], "Luz noturna e manter acordado", "dois botões"),
+    ("bandeja", ["tray"], "Bandeja do sistema", "ícones de rede, Bluetooth etc."),
+    ("notificacoes", ["custom/notification"], "Notificações", "sino da central (Super+N)"),
+]
+# sempre na barra, no fim
+MODULOS_FIXOS = ["custom/power"]
+
+DESTAQUES = [("7aa2f7", "Azul Tokyo Night"), ("7dcfff", "Ciano"), ("bb9af7", "Roxo"),
+             ("9ece6a", "Verde"), ("ff9e64", "Laranja"), ("e0af68", "Amarelo"),
+             ("f7768e", "Vermelho")]
+LUGARES = [("left", "À esquerda"), ("right", "À direita"), ("top", "Em cima"),
+           ("bottom", "Embaixo")]
+FOCOS = [("disabled", "Clique para focar"), ("normal", "Ao passar o mouse por cima"),
+         ("always", "Sempre segue o mouse")]
+NOVAS = [("top", "No topo (vira a janela principal)"), ("bottom", "No fim da pilha")]
+MODOS_PAPEL = [("fill", "Preencher (corta as sobras)"), ("fit", "Ajustar (mostra inteira)"),
+               ("center", "Centralizar (tamanho original)"), ("stretch", "Esticar"),
+               ("tile", "Lado a lado")]
+# layout|variante|modelo
+TECLADOS = [("br|abnt2|abnt2", "Português (Brasil) ABNT2"),
+            ("us||pc105", "Inglês (EUA)"),
+            ("us|intl|pc105", "Inglês (EUA) internacional, com acentos"),
+            ("pt||pc105", "Português (Portugal)")]
+TEMPOS_BLOQUEIO = [(0, "Nunca"), (1, "1 minuto"), (2, "2 minutos"), (5, "5 minutos"),
+                   (10, "10 minutos"), (15, "15 minutos"), (30, "30 minutos")]
+TEMPOS_TELA = [(0, "Nunca"), (2, "2 minutos"), (5, "5 minutos"), (10, "10 minutos"),
+               (15, "15 minutos"), (30, "30 minutos"), (60, "1 hora")]
+
+# nomes amigáveis dos comandos dos atalhos do init
+ACOES = {
+    "spawn xfce4-terminal": "Terminal",
+    "close": "Fechar a janela",
+    "exit": "Sair do River",
+    "spawn fuzzel": "Abrir aplicativos (fuzzel)",
+    "spawn thunar": "Gerenciador de arquivos",
+    "spawn /usr/local/bin/voidbr-river-lock": "Bloquear a tela",
+    "spawn voidbr-river-tweaks": "VoidBR River Tweaks",
+    "focus-view next": "Próxima janela",
+    "focus-view previous": "Janela anterior",
+    "swap next": "Trocar com a próxima",
+    "swap previous": "Trocar com a anterior",
+    "toggle-float": "Janela flutuante / encaixada",
+    "toggle-fullscreen": "Tela cheia",
+    "zoom": "Tornar a janela principal",
+    "spawn pkill -x wlogout || wlogout -b 5": "Menu de energia (sair, desligar…)",
+    "spawn swaync-client -t -sw": "Central de notificações",
+    "send-layout-cmd rivertile main-ratio -0.05": "Diminuir a área principal",
+    "send-layout-cmd rivertile main-ratio +0.05": "Aumentar a área principal",
+    "move-view": "Mover a janela (arrastar)",
+    "resize-view": "Redimensionar a janela (arrastar)",
+}
+
+CSS = """
+window { background-color: #1e1f29; }
+label { color: #f1f1f1; }
+.titulo-app { font-size: 20px; font-weight: 800; color: #9ece6a; }
+.subtitulo { color: #a9b1d6; font-size: 12px; }
+.rotulo-campo { font-weight: bold; }
+.dica { color: #8a8fa8; font-size: 11px; }
+.secao { color: #7aa2f7; font-weight: bold; margin-top: 6px; }
+.aviso { color: #e0af68; }
+.atalho { font-family: monospace; color: #9ece6a; }
+.conteudo button.botao-verde, .botao-verde { background: linear-gradient(180deg, #34d399, #059669); color: white;
+    font-weight: bold; border-radius: 10px; padding: 10px 14px; }
+.conteudo button.botao-verde:hover, .botao-verde:hover { background: #34d399; }
+.conteudo button.botao-laranja, .botao-laranja { background: linear-gradient(180deg, #fbbf24, #d97706); color: white;
+    font-weight: bold; border-radius: 10px; padding: 10px 14px; }
+.conteudo button.botao-laranja:hover, .botao-laranja:hover { background: #fbbf24; }
+.conteudo button.botao-azul, .botao-azul { background: linear-gradient(180deg, #60a5fa, #2563eb); color: white;
+    font-weight: bold; border-radius: 10px; padding: 10px 14px; }
+.conteudo button.botao-azul:hover, .botao-azul:hover { background: #60a5fa; }
+.caixa-status { background-color: #2a2b3a; border-radius: 10px; padding: 8px; }
+.cabecalho-app { background-color: #1a1b26; color: #f1f1f1; }
+.botao-fonte { font-weight: bold; padding: 2px 10px; min-height: 24px; background: #3b3d52;
+    color: #f1f1f1; border: 1px solid #4b4e66; }
+.botao-fonte label { color: #f1f1f1; }
+.botao-fonte:hover { background: #4b4e66; }
+.botao-fonte:disabled { background: #2a2b3a; }
+notebook > header, notebook > stack, scrolledwindow, viewport { background-color: #24283b; }
+notebook > header tab label { color: #a9b1d6; }
+notebook > header tab:checked label { color: #ffffff; }
+.conteudo button { background: #3b3d52; color: #f1f1f1; border: 1px solid #4b4e66; }
+.conteudo button label { color: #f1f1f1; }
+popover contents, popover arrow { background-color: #2a2b3a; }
+window.dialog button, window.messagedialog button { background: #3b3d52; border: 1px solid #4b4e66; }
+window.dialog button label, window.messagedialog button label { color: #f1f1f1; }
+window.dialog button:hover, window.messagedialog button:hover { background: #4b4e66; }
+"""
+
+MARCA_INI = "/* voidbr-river-tweaks: inicio (gerado pelo app, não edite entre as marcas) */"
+MARCA_FIM = "/* voidbr-river-tweaks: fim */"
+
+
+# ---------------------------------------------------------------------------
+#   preferências do próprio app (valores e fonte)
+# ---------------------------------------------------------------------------
+
+def ler_prefs_app():
+    try:
+        with open(PREFS_APP, encoding="utf-8") as f:
+            dados = json.load(f)
+        return dados if isinstance(dados, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def gravar_prefs_app(**valores):
+    dados = ler_prefs_app()
+    dados.update(valores)
+    os.makedirs(os.path.dirname(PREFS_APP), exist_ok=True)
+    with open(PREFS_APP, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+def _ler(caminho):
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _gravar(caminho, texto):
+    os.makedirs(os.path.dirname(caminho), exist_ok=True)
+    tmp = caminho + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(texto)
+    os.replace(tmp, caminho)
+
+
+# ---------------------------------------------------------------------------
+#   Waybar (config em JSONC: altera só os campos do app, mantém os comentários)
+# ---------------------------------------------------------------------------
+
+def _jsonc(texto):
+    """Lê o JSONC da Waybar (tira os comentários // de linha inteira)."""
+    return json.loads(re.sub(r"^\s*//.*$", "", texto, flags=re.M))
+
+
+def waybar_ler():
+    txt = _ler(WAYBAR_CFG)
+    if txt is None:
+        return {}
+    try:
+        cfg = _jsonc(txt)
+    except ValueError:
+        return {}
+    direita = cfg.get("modules-right", [])
+    margem = str(cfg.get("margin", ""))
+    v = {
+        "barra_posicao": cfg.get("position", "top"),
+        "barra_altura": int(cfg.get("height", 38) or 38),
+        "barra_estilo": "colada" if margem.strip() in ("", "0") else "ilha",
+        "modulos": {chave: all(m in direita for m in mods) for chave, mods, _t, _d in MODULOS_BARRA},
+    }
+    return v
+
+
+def _trocar(txt, chave, valor_json):
+    """Troca o valor de "chave" no nível de cima do config (string, número ou lista)."""
+    padrao = re.compile(r'("%s"\s*:\s*)(\[[^\]]*\]|"[^"]*"|-?\d+)' % re.escape(chave))
+    if padrao.search(txt):
+        return padrao.sub(lambda m: m.group(1) + valor_json, txt, count=1)
+    # chave ausente: entra logo depois da primeira chave "{"
+    return txt.replace("{", "{\n  \"%s\": %s," % (chave, valor_json), 1)
+
+
+def waybar_gravar(v):
+    txt = _ler(WAYBAR_CFG)
+    if txt is None:
+        raise RuntimeError(f"{WAYBAR_CFG} não encontrado: use o Padrão VoidBR para recriar.")
+    direita = []
+    for chave, mods, _t, _d in MODULOS_BARRA:
+        if v["modulos"].get(chave, True):
+            direita += mods
+    direita += MODULOS_FIXOS
+    lista = "[\n" + ",\n".join(f'    "{m}"' for m in direita) + "\n  ]"
+    txt = _trocar(txt, "position", json.dumps(v["barra_posicao"]))
+    txt = _trocar(txt, "height", str(int(v["barra_altura"])))
+    if v["barra_estilo"] == "ilha":
+        margem = "4 8 0 8" if v["barra_posicao"] == "top" else "0 8 4 8"
+    else:
+        margem = "0"
+    txt = _trocar(txt, "margin", json.dumps(margem))
+    txt = _trocar(txt, "modules-right", lista)
+    _jsonc(txt)  # não grava um config quebrado
+    _gravar(WAYBAR_CFG, txt)
+
+    # estilo: bloco entre marcas no fim do style.css (vence o que vem antes)
+    css = _ler(WAYBAR_CSS) or ""
+    css = re.sub(r"\n?" + re.escape(MARCA_INI) + r".*?" + re.escape(MARCA_FIM) + r"\n?", "\n",
+                 css, flags=re.S).rstrip() + "\n"
+    raio = "14px" if v["barra_estilo"] == "ilha" else "0"
+    borda = "1px solid alpha(@fg, 0.08)" if v["barra_estilo"] == "ilha" else "none"
+    bloco = (f"\n{MARCA_INI}\nwindow#waybar {{\n    border-radius: {raio};\n    border: {borda};\n}}\n"
+             f"#tags button.focused {{\n    background-color: #{v['destaque']};\n"
+             f"    border-color: #{v['destaque']};\n}}\n{MARCA_FIM}\n")
+    _gravar(WAYBAR_CSS, css + bloco)
+
+
+# ---------------------------------------------------------------------------
+#   temas, papéis de parede e atalhos
+# ---------------------------------------------------------------------------
+
+def _pastas_tema(sub):
+    return [os.path.join(HOME, "." + sub), os.path.join(HOME, ".local", "share", sub),
+            os.path.join("/usr/share", sub)]
+
+
+def _temas(pastas, exige):
+    achados = set()
+    for pasta in pastas:
+        for d in glob.glob(os.path.join(pasta, "*")):
+            if any(os.path.exists(os.path.join(d, e)) for e in exige):
+                achados.add(os.path.basename(d))
+    return [(n, n) for n in sorted(achados, key=str.lower)]
+
+
+def temas_gtk():
+    return _temas(_pastas_tema("themes"), ["gtk-3.0/gtk.css", "gtk-4.0/gtk.css"])
+
+
+def temas_icones():
+    nomes = []
+    for nome, _r in _temas(_pastas_tema("icons"), ["index.theme"]):
+        # só cursor (sem ícones de apps): fica para a lista de cursores
+        dirs = [d for p in _pastas_tema("icons") for d in glob.glob(os.path.join(p, nome, "*"))
+                if os.path.isdir(d)]
+        if dirs and all(os.path.basename(d) == "cursors" for d in dirs):
+            continue
+        nomes.append((nome, nome))
+    return nomes
+
+
+def temas_cursor():
+    return _temas(_pastas_tema("icons"), ["cursors"])
+
+
+def papeis():
+    lista = []
+    for caminho in sorted(glob.glob(os.path.join(PAPEL_PASTA, "**", "*"), recursive=True)):
+        if caminho.lower().endswith(PAPEL_EXT) and os.path.isfile(caminho):
+            lista.append((caminho, os.path.relpath(caminho, PAPEL_PASTA)))
+    return lista
+
+
+def atalhos_do_init():
+    """Lê os riverctl map / map-pointer do modo normal no init do usuário."""
+    txt = _ler(RIVER_INIT) or ""
+    atalhos = []
+    for linha in txt.splitlines():
+        linha = linha.strip()
+        m = re.match(r"riverctl\s+map(-pointer)?\s+normal\s+(\S+)\s+(\S+)\s+(.+)$", linha)
+        if not m or "$" in m.group(3):
+            continue
+        mods, tecla, acao = m.group(2), m.group(3), m.group(4).strip()
+        try:
+            acao = " ".join(shlex.split(acao))
+        except ValueError:
+            pass
+        tecla = {"BTN_LEFT": "botão esquerdo", "BTN_RIGHT": "botão direito",
+                 "BTN_MIDDLE": "botão do meio", "Return": "Enter",
+                 "Space": "Espaço"}.get(tecla, tecla)
+        combinacao = tecla if mods == "None" else f"{mods}+{tecla}"
+        atalhos.append((combinacao, ACOES.get(acao, acao)))
+    if re.search(r"set-focused-tags", txt):
+        atalhos.append(("Super+1…9", "Ir para a tag (área de trabalho)"))
+        atalhos.append(("Super+Shift+1…9", "Mandar a janela para a tag"))
+    return atalhos
+
+
+# ---------------------------------------------------------------------------
+#   valores atuais e aplicação
+# ---------------------------------------------------------------------------
+
+def river_rodando():
+    return bool(os.environ.get("WAYLAND_DISPLAY")) and subprocess.run(
+        ["pgrep", "-u", str(os.getuid()), "-x", "river"], stdout=subprocess.DEVNULL).returncode == 0
+
+
+def valores_atuais():
+    v = json.loads(json.dumps(PADRAO))
+    salvo = ler_prefs_app().get("valores", {})
+    if isinstance(salvo, dict):
+        for k in NOMES:
+            if k in salvo:
+                v[k] = salvo[k]
+    # a barra pode ter sido editada à mão: vale o que está no config dela
+    barra = waybar_ler()
+    for k, val in barra.items():
+        if k == "modulos":
+            v["modulos"].update(val)
+        else:
+            v[k] = val
+    return v
+
+
+def gravar_tweaks_sh(v):
+    layout, variante, modelo = v["teclado"].split("|")
+    linhas = {
+        "VOIDBR_KB_LAYOUT": layout,
+        "VOIDBR_KB_VARIANT": variante,
+        "VOIDBR_KB_MODEL": modelo,
+        "VOIDBR_REPEAT_RATE": int(v["repeticao_taxa"]),
+        "VOIDBR_REPEAT_DELAY": int(v["repeticao_atraso"]),
+        "VOIDBR_TAP": "enabled" if v["toque"] else "disabled",
+        "VOIDBR_NATURAL_SCROLL": "enabled" if v["rolagem_natural"] else "disabled",
+        "VOIDBR_POINTER_ACCEL": f"{int(v['velocidade']) / 100:.2f}",
+        "VOIDBR_FOCUS_FOLLOWS": v["foco"],
+        "VOIDBR_ATTACH": v["novas"],
+        "VOIDBR_CURSOR": v["cursor"],
+        "VOIDBR_CURSOR_SIZE": int(v["cursor_tamanho"]),
+        "VOIDBR_BORDER_WIDTH": int(v["borda"]),
+        "VOIDBR_ACCENT": v["destaque"],
+        "VOIDBR_GAP": int(v["espaco"]),
+        "VOIDBR_MAIN_LOCATION": v["area_lugar"],
+        "VOIDBR_MAIN_RATIO": f"{int(v['area_proporcao']) / 100:.2f}",
+        "VOIDBR_WALL": v["papel"],
+        "VOIDBR_WALL_MODE": v["papel_modo"],
+        "VOIDBR_LOCK_MIN": int(v["bloquear_min"]),
+        "VOIDBR_SCREEN_OFF_MIN": int(v["apagar_min"]),
+    }
+    texto = ("# Gerado pelo VoidBR River Tweaks - lido pelo voidbr-river-apply\n"
+             "# Para voltar ao padrão: VoidBR River Tweaks -> Padrão VoidBR\n")
+    texto += "".join(f"{k}={shlex.quote(str(val))}\n" for k, val in linhas.items())
+    _gravar(TWEAKS_SH, texto)
+
+
+def gtk_gravar(v):
+    for versao in ("gtk-3.0", "gtk-4.0"):
+        caminho = os.path.join(CONFIG, versao, "settings.ini")
+        cp = configparser.ConfigParser(interpolation=None)
+        cp.optionxform = str
+        cp.read(caminho, encoding="utf-8")
+        if not cp.has_section("Settings"):
+            cp.add_section("Settings")
+        cp["Settings"]["gtk-theme-name"] = v["gtk_tema"]
+        cp["Settings"]["gtk-icon-theme-name"] = v["icones"]
+        cp["Settings"]["gtk-cursor-theme-name"] = v["cursor"]
+        cp["Settings"]["gtk-cursor-theme-size"] = str(int(v["cursor_tamanho"]))
+        os.makedirs(os.path.dirname(caminho), exist_ok=True)
+        with open(caminho, "w", encoding="utf-8") as f:
+            cp.write(f, space_around_delimiters=False)
+    txt = _ler(FUZZEL_INI)
+    if txt is not None:
+        if re.search(r"^icon-theme=", txt, flags=re.M):
+            txt = re.sub(r"^icon-theme=.*$", f"icon-theme={v['icones']}", txt, flags=re.M)
+        else:
+            txt = txt.replace("[main]\n", f"[main]\nicon-theme={v['icones']}\n", 1)
+        _gravar(FUZZEL_INI, txt)
+    if shutil.which("gsettings"):
+        base = ["gsettings", "set", "org.gnome.desktop.interface"]
+        for chave, val in (("gtk-theme", v["gtk_tema"]), ("icon-theme", v["icones"]),
+                           ("cursor-theme", v["cursor"]),
+                           ("cursor-size", str(int(v["cursor_tamanho"])))):
+            subprocess.run(base + [chave, val], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+
+
+def gtklock_gravar(v):
+    txt = _ler(GTKLOCK_CFG) or "[main]\n"
+    linhas = [l for l in txt.splitlines() if not re.match(r"\s*(gtk-theme|background)\s*=", l)]
+    i = next((n for n, l in enumerate(linhas) if l.strip() == "[main]"), None)
+    if i is None:
+        linhas.insert(0, "[main]")
+        i = 0
+    novas = [f"gtk-theme={v['gtk_tema']}"]
+    if v["papel_bloqueio"]:
+        novas.append(f"background={v['papel']}")
+    linhas[i + 1:i + 1] = novas
+    _gravar(GTKLOCK_CFG, "\n".join(linhas) + "\n")
+
+
+def _apply(parte):
+    if os.access(APPLY, os.X_OK):
+        subprocess.run([APPLY, parte], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+GRUPOS = {
+    "barra": ["barra_posicao", "barra_altura", "barra_estilo", "modulos", "destaque"],
+    "aparencia": ["gtk_tema", "icones", "cursor", "cursor_tamanho"],
+    "river": ["destaque", "borda", "foco", "novas", "teclado", "repeticao_taxa",
+              "repeticao_atraso", "toque", "rolagem_natural", "velocidade", "cursor",
+              "cursor_tamanho"],
+    "layout": ["espaco", "area_lugar", "area_proporcao"],
+    "papel": ["papel", "papel_modo"],
+    "bloqueio": ["gtk_tema", "papel", "papel_bloqueio"],
+    "inatividade": ["bloquear_min", "apagar_min"],
+}
+NOMES_GRUPO = {"barra": "barra", "aparencia": "tema e ícones", "river": "teclado, mouse e bordas",
+               "layout": "janelas", "papel": "papel de parede", "bloqueio": "tela de bloqueio",
+               "inatividade": "energia"}
+
+
+def aplicar(v, antes, progresso=lambda _t: None):
+    mudou = {g for g, chaves in GRUPOS.items() if any(v[k] != antes.get(k) for k in chaves)}
+    if not mudou:
+        return []
+    progresso("⏳ Gravando os ajustes…")
+    gravar_tweaks_sh(v)
+    gravar_prefs_app(valores={k: v[k] for k in NOMES})
+    if "barra" in mudou:
+        waybar_gravar(v)
+    if "aparencia" in mudou:
+        gtk_gravar(v)
+    if "bloqueio" in mudou:
+        gtklock_gravar(v)
+    if river_rodando():
+        for grupo, parte in (("river", "river"), ("layout", "layout"), ("papel", "papel"),
+                             ("inatividade", "inatividade"), ("barra", "barra")):
+            if grupo in mudou:
+                progresso(f"⏳ Aplicando: {NOMES_GRUPO[grupo]}…")
+                _apply(parte)
+    return [NOMES_GRUPO[g] for g in GRUPOS if g in mudou]
+
+
+def _backup(rel, pasta):
+    origem = os.path.join(CONFIG, rel)
+    if os.path.isfile(origem):
+        destino = os.path.join(pasta, ".config", rel)
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        shutil.copy2(origem, destino)
+
+
+def restaurar(base, progresso=lambda _t: None):
+    """base: "voidbr" (skel do VoidBR) ou "river" (exemplo original do River)."""
+    agora = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    pasta = os.path.join(HOME, f".voidbr-skel-backup-{agora}")
+    progresso(f"⏳ Guardando os arquivos atuais em {pasta}…")
+    for rel in ARQ_SKEL:
+        _backup(rel, pasta)
+    for arq in (TWEAKS_SH, PREFS_APP):
+        if os.path.isfile(arq):
+            _backup(os.path.relpath(arq, CONFIG), pasta)
+            os.remove(arq)
+    if base == "voidbr":
+        progresso("⏳ Voltando as configurações do VoidBR…")
+        for rel in ARQ_SKEL:
+            origem = os.path.join(SKEL, rel)
+            if os.path.isfile(origem):
+                destino = os.path.join(CONFIG, rel)
+                os.makedirs(os.path.dirname(destino), exist_ok=True)
+                shutil.copy2(origem, destino)
+        if river_rodando():
+            _apply("tudo")
+            return pasta, True
+        return pasta, False
+    # River original: init de exemplo do pacote river, com o terminal do VoidBR
+    txt = _ler(EXEMPLO_RIVER)
+    if txt is None:
+        raise RuntimeError(f"{EXEMPLO_RIVER} não encontrado (pacote river).")
+    txt = txt.replace("spawn foot", "spawn xfce4-terminal")
+    _gravar(RIVER_INIT, txt)
+    os.chmod(RIVER_INIT, 0o755)
+    return pasta, False
+
+
+# ---------------------------------------------------------------------------
+#   interface
+# ---------------------------------------------------------------------------
+
+def _escolha(dd, opcoes, valor):
+    for i, (v, _r) in enumerate(opcoes):
+        if v == valor:
+            dd.set_selected(i)
+            return
+    if valor not in (None, ""):
+        # valor que não está na lista (ex.: tema removido): mostra mesmo assim
+        opcoes.append((valor, f"{valor} (atual)"))
+        dd.get_model().append(f"{valor} (atual)")
+        dd.set_selected(len(opcoes) - 1)
+
+
+class JanelaTweaks(Gtk.ApplicationWindow):
+    def __init__(self, app, aba_inicial=None):
+        super().__init__(application=app, title="VoidBR River Tweaks")
+        self.set_default_size(720, 680)
+
+        prov = Gtk.CssProvider()
+        prov.load_from_data(CSS.encode("utf-8"))
+        Gtk.StyleContext.add_provider_for_display(self.get_display(), prov,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.css_fonte = Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_display(self.get_display(), self.css_fonte,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        try:
+            self.escala_fonte = min(ESCALA_MAX, max(ESCALA_MIN,
+                                                    float(ler_prefs_app().get("font_scale", 1.0))))
+        except (TypeError, ValueError):
+            self.escala_fonte = 1.0
+
+        # --- cabeçalho: fonte à esquerda, menu à direita ---
+        cab = Gtk.HeaderBar()
+        cab.add_css_class("cabecalho-app")
+        self.set_titlebar(cab)
+        fonte = Gtk.Box()
+        fonte.add_css_class("linked")
+        self.b_menor = Gtk.Button(label="A−", tooltip_text="Diminuir a fonte (Ctrl -)")
+        self.b_escala = Gtk.Button(label="100%", tooltip_text="Tamanho normal (Ctrl 0)")
+        self.b_maior = Gtk.Button(label="A+", tooltip_text="Aumentar a fonte (Ctrl +)")
+        for b, passo in ((self.b_menor, -1), (self.b_escala, 0), (self.b_maior, 1)):
+            b.add_css_class("botao-fonte")
+            b.connect("clicked", lambda _b, p=passo: self.mudar_fonte(p))
+            fonte.append(b)
+        cab.pack_start(fonte)
+
+        menu = Gio.Menu()
+        menu.append("📝 Editar o init do River", "win.editar_init")
+        menu.append("ℹ️ Sobre / Créditos", "win.sobre")
+        bmenu = Gtk.MenuButton(icon_name="open-menu-symbolic")
+        bmenu.set_menu_model(menu)
+        cab.pack_end(bmenu)
+        for nome, cb in (("sobre", self.ao_clicar_sobre),
+                         ("editar_init", self.ao_editar_init),
+                         ("fonte_mais", lambda *_: self.mudar_fonte(1)),
+                         ("fonte_menos", lambda *_: self.mudar_fonte(-1)),
+                         ("fonte_normal", lambda *_: self.mudar_fonte(0))):
+            acao = Gio.SimpleAction.new(nome, None)
+            acao.connect("activate", cb)
+            self.add_action(acao)
+        app.set_accels_for_action("win.fonte_mais", ["<Control>plus", "<Control>equal",
+                                                     "<Control>KP_Add"])
+        app.set_accels_for_action("win.fonte_menos", ["<Control>minus", "<Control>KP_Subtract"])
+        app.set_accels_for_action("win.fonte_normal", ["<Control>0", "<Control>KP_0"])
+        self.aplicar_fonte()
+
+        caixa = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        caixa.add_css_class("conteudo")
+        for lado in ("top", "bottom", "start", "end"):
+            getattr(caixa, f"set_margin_{lado}")(16)
+        self.set_child(caixa)
+
+        titulo = Gtk.Label(label="🛠️ VoidBR River Tweaks", xalign=0)
+        titulo.add_css_class("titulo-app")
+        caixa.append(titulo)
+        sub = Gtk.Label(label="Barra, aparência, janelas, papel de parede, teclado, mouse e energia",
+                        xalign=0)
+        sub.add_css_class("subtitulo")
+        caixa.append(sub)
+
+        self.abas = Gtk.Notebook()
+        self.abas.set_vexpand(True)
+        self.abas.set_scrollable(True)
+        self.indice_aba = {}
+        for chave, rotulo, fabrica in (("barra", "🧱 Barra", self._aba_barra),
+                                       ("aparencia", "🎨 Aparência", self._aba_aparencia),
+                                       ("janelas", "🪟 Janelas", self._aba_janelas),
+                                       ("papel", "🖼️ Papel de parede", self._aba_papel),
+                                       ("teclado", "⌨️ Teclado, mouse e atalhos", self._aba_teclado),
+                                       ("energia", "🔋 Energia", self._aba_energia)):
+            rolagem = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+            rolagem.set_child(fabrica())
+            self.indice_aba[chave] = self.abas.append_page(rolagem, Gtk.Label(label=rotulo))
+        caixa.append(self.abas)
+
+        st = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        st.add_css_class("caixa-status")
+        self.label_status = Gtk.Label(label="", xalign=0, wrap=True)
+        st.append(self.label_status)
+        caixa.append(st)
+
+        linha = Gtk.Box(spacing=8, halign=Gtk.Align.END)
+        b_river = Gtk.Button(label="🔵 Padrão River",
+                             tooltip_text="Volta ao River original: o init de exemplo do pacote "
+                                          "river, sem barra, papel de parede nem nada do VoidBR.")
+        b_river.add_css_class("botao-azul")
+        b_river.connect("clicked", lambda *_: self.confirmar_restaurar("river"))
+        b_voidbr = Gtk.Button(label="↩️ Padrão VoidBR",
+                              tooltip_text="Volta ao visual VoidBR completo: barra em ilha, "
+                                           "cores Tokyo Night, atalhos e papel de parede.")
+        b_voidbr.add_css_class("botao-laranja")
+        b_voidbr.connect("clicked", lambda *_: self.confirmar_restaurar("voidbr"))
+        self.b_restaurar = (b_river, b_voidbr)
+        self.b_aplicar = Gtk.Button(label="✅ Aplicar")
+        self.b_aplicar.add_css_class("botao-verde")
+        self.b_aplicar.connect("clicked", self.ao_clicar_aplicar)
+        for b in (b_river, b_voidbr, self.b_aplicar):
+            linha.append(b)
+        caixa.append(linha)
+
+        self.recarregar()
+        if aba_inicial in self.indice_aba:
+            self.abas.set_current_page(self.indice_aba[aba_inicial])
+
+    # ----- blocos de interface -----
+
+    def _grade(self, titulo=None):
+        g = Gtk.Grid(column_spacing=14, row_spacing=10)
+        for lado in ("top", "bottom", "start", "end"):
+            getattr(g, f"set_margin_{lado}")(14)
+        g._linha = 0
+        if titulo:
+            self._secao(g, titulo)
+        return g
+
+    def _secao(self, g, texto):
+        s = Gtk.Label(label=texto, xalign=0)
+        s.add_css_class("secao")
+        g.attach(s, 0, g._linha, 3, 1)
+        g._linha += 1
+
+    def _rotulo(self, g, texto, dica=None):
+        r = Gtk.Label(label=texto, xalign=0, hexpand=True)
+        r.add_css_class("rotulo-campo")
+        g.attach(r, 0, g._linha, 1, 1)
+        if dica:
+            d = Gtk.Label(label=dica, xalign=0, wrap=True)
+            d.add_css_class("dica")
+            g.attach(d, 0, g._linha + 1, 3, 1)
+
+    def _avanca(self, g, dica):
+        g._linha += 2 if dica else 1
+
+    def _chave(self, g, texto, dica=None):
+        self._rotulo(g, texto, dica)
+        sw = Gtk.Switch(halign=Gtk.Align.END, valign=Gtk.Align.CENTER)
+        g.attach(sw, 1, g._linha, 2, 1)
+        self._avanca(g, dica)
+        return sw
+
+    def _lista(self, g, texto, opcoes, dica=None):
+        self._rotulo(g, texto, dica)
+        dd = Gtk.DropDown.new_from_strings([r for _v, r in opcoes])
+        dd._opcoes = opcoes
+        g.attach(dd, 1, g._linha, 2, 1)
+        self._avanca(g, dica)
+        return dd
+
+    def _escala(self, g, texto, minimo, maximo, passo=1, sufixo="", dica=None):
+        self._rotulo(g, texto, dica)
+        esc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, minimo, maximo, passo)
+        esc.set_size_request(220, -1)
+        esc.set_draw_value(False)
+        val = Gtk.Label(xalign=1, width_chars=7)
+        esc.connect("value-changed", lambda e: val.set_text(f"{int(e.get_value())}{sufixo}"))
+        g.attach(esc, 1, g._linha, 1, 1)
+        g.attach(val, 2, g._linha, 1, 1)
+        self._avanca(g, dica)
+        return esc
+
+    def _aviso(self, g, texto):
+        a = Gtk.Label(label=texto, xalign=0, wrap=True)
+        a.add_css_class("aviso")
+        g.attach(a, 0, g._linha, 3, 1)
+        g._linha += 1
+
+    @staticmethod
+    def _valor_dd(dd):
+        i = dd.get_selected()
+        return dd._opcoes[i][0] if 0 <= i < len(dd._opcoes) else None
+
+    # ----- abas -----
+
+    def _aba_barra(self):
+        g = self._grade("Barra (Waybar)")
+        self.w_barra_estilo = self._lista(g, "Estilo", list(ESTILOS_BARRA),
+                                          "Ilha VoidBR: flutua 4 px longe da borda, com cantos "
+                                          "arredondados.")
+        self.w_barra_posicao = self._lista(g, "Posição na tela", list(POSICOES_BARRA))
+        self.w_barra_altura = self._escala(g, "Altura", 28, 56, 2, " px")
+        self._secao(g, "Módulos da direita")
+        self.w_mod = {}
+        for chave, _mods, titulo, dica in MODULOS_BARRA:
+            self.w_mod[chave] = self._chave(g, titulo, dica)
+        self._aviso(g, "O menu VoidBR, as tags, o relógio e o botão de desligar ficam sempre.")
+        return g
+
+    def _aba_aparencia(self):
+        g = self._grade("Tema")
+        self.op_gtk = temas_gtk()
+        self.w_gtk = self._lista(g, "Tema GTK", self.op_gtk,
+                                 "Visual dos apps GTK (Firefox, Thunar, este app…) e da tela de "
+                                 "bloqueio.")
+        self.op_icones = temas_icones()
+        self.w_icones = self._lista(g, "Ícones", self.op_icones,
+                                    "Ícones dos apps e do lançador (fuzzel).")
+        self.op_cursor = temas_cursor()
+        self.w_cursor = self._lista(g, "Cursor", self.op_cursor)
+        self.w_cursor_tam = self._escala(g, "Tamanho do cursor", 16, 48, 4, " px")
+        self._secao(g, "Bordas das janelas")
+        self.w_destaque = self._lista(g, "Cor de destaque", list(DESTAQUES),
+                                      "Borda da janela em foco e tag atual na barra.")
+        self.w_borda = self._escala(g, "Largura da borda", 0, 6, 1, " px")
+        return g
+
+    def _aba_janelas(self):
+        g = self._grade("Arrumação (rivertile)")
+        self.w_area_lugar = self._lista(g, "Área principal", list(LUGARES),
+                                        "Onde fica a janela principal; as outras se dividem no "
+                                        "resto.")
+        self.w_area_prop = self._escala(g, "Tamanho da área principal", 30, 80, 5, "%",
+                                        "Super+Alt+H / Super+Alt+L mudam na hora, sem gravar.")
+        self.w_espaco = self._escala(g, "Espaço entre as janelas", 0, 24, 2, " px")
+        self._secao(g, "Comportamento")
+        self.w_foco = self._lista(g, "Foco", list(FOCOS))
+        self.w_novas = self._lista(g, "Janelas novas entram", list(NOVAS))
+        return g
+
+    def _aba_papel(self):
+        g = self._grade("Papel de parede")
+        self.op_papel = papeis()
+        self.w_papel = self._lista(g, "Imagem", self.op_papel,
+                                   f"Imagens de {PAPEL_PASTA} (voidbr-wallpapers).")
+        botao = Gtk.Button(label="📂 Escolher outra imagem…", halign=Gtk.Align.START)
+        botao.connect("clicked", self.ao_escolher_imagem)
+        g.attach(botao, 0, g._linha, 3, 1)
+        g._linha += 1
+        self.w_papel_modo = self._lista(g, "Modo", list(MODOS_PAPEL))
+        self.w_papel_bloqueio = self._chave(g, "Usar também na tela de bloqueio",
+                                            "Desligado: a tela de bloqueio fica só com a cor de "
+                                            "fundo.")
+        return g
+
+    def _aba_teclado(self):
+        g = self._grade("Teclado")
+        self.w_teclado = self._lista(g, "Layout", list(TECLADOS))
+        self.w_rep_atraso = self._escala(g, "Atraso para repetir a tecla", 150, 800, 50, " ms")
+        self.w_rep_taxa = self._escala(g, "Velocidade da repetição", 10, 80, 5, "/s")
+        self._secao(g, "Mouse e touchpad")
+        self.w_toque = self._chave(g, "Tocar para clicar", "Só para touchpads.")
+        self.w_rolagem = self._chave(g, "Rolagem natural", "Rolagem invertida, como no celular.")
+        self.w_velocidade = self._escala(g, "Velocidade do ponteiro", -100, 100, 10, "",
+                                         "0 é o normal do libinput.")
+        self._secao(g, "Atalhos (do ~/.config/river/init)")
+        self.g_atalhos = g
+        self.l_atalhos = []
+        return g
+
+    def _aba_energia(self):
+        g = self._grade("Inatividade")
+        self.w_bloquear = self._lista(g, "Bloquear a tela depois de", list(TEMPOS_BLOQUEIO),
+                                      "A tela bloqueia também antes de suspender e por Super+L.")
+        self.w_apagar = self._lista(g, "Apagar a tela depois de", list(TEMPOS_TELA))
+        self._aviso(g, "O botão ☕ (manter acordado) da barra pausa os dois enquanto estiver "
+                       "ligado.")
+        return g
+
+    def _mostrar_atalhos(self, atalhos):
+        g = self.g_atalhos
+        for w in self.l_atalhos:
+            g.remove(w)
+        self.l_atalhos = []
+        linha = g._linha
+        for tecla, descr in atalhos:
+            t = Gtk.Label(label=tecla, xalign=0)
+            t.add_css_class("atalho")
+            d = Gtk.Label(label=descr, xalign=0, hexpand=True, wrap=True)
+            g.attach(t, 0, linha, 1, 1)
+            g.attach(d, 1, linha, 2, 1)
+            self.l_atalhos += [t, d]
+            linha += 1
+        nota = Gtk.Label(label="Para mudar atalhos: menu ☰ → Editar o init do River. Valem no "
+                               "próximo login.", xalign=0, wrap=True)
+        nota.add_css_class("dica")
+        g.attach(nota, 0, linha, 3, 1)
+        self.l_atalhos.append(nota)
+
+    # ----- valores <-> interface -----
+
+    def mostrar(self, v):
+        _escolha(self.w_barra_estilo, self.w_barra_estilo._opcoes, v["barra_estilo"])
+        _escolha(self.w_barra_posicao, self.w_barra_posicao._opcoes, v["barra_posicao"])
+        self.w_barra_altura.set_value(v["barra_altura"])
+        for m, sw in self.w_mod.items():
+            sw.set_active(v["modulos"].get(m, True))
+        _escolha(self.w_gtk, self.op_gtk, v["gtk_tema"])
+        _escolha(self.w_icones, self.op_icones, v["icones"])
+        _escolha(self.w_cursor, self.op_cursor, v["cursor"])
+        self.w_cursor_tam.set_value(v["cursor_tamanho"])
+        _escolha(self.w_destaque, self.w_destaque._opcoes, v["destaque"])
+        self.w_borda.set_value(v["borda"])
+        _escolha(self.w_area_lugar, self.w_area_lugar._opcoes, v["area_lugar"])
+        self.w_area_prop.set_value(v["area_proporcao"])
+        self.w_espaco.set_value(v["espaco"])
+        _escolha(self.w_foco, self.w_foco._opcoes, v["foco"])
+        _escolha(self.w_novas, self.w_novas._opcoes, v["novas"])
+        _escolha(self.w_papel, self.op_papel, v["papel"])
+        _escolha(self.w_papel_modo, self.w_papel_modo._opcoes, v["papel_modo"])
+        self.w_papel_bloqueio.set_active(v["papel_bloqueio"])
+        _escolha(self.w_teclado, self.w_teclado._opcoes, v["teclado"])
+        self.w_rep_atraso.set_value(v["repeticao_atraso"])
+        self.w_rep_taxa.set_value(v["repeticao_taxa"])
+        self.w_toque.set_active(v["toque"])
+        self.w_rolagem.set_active(v["rolagem_natural"])
+        self.w_velocidade.set_value(v["velocidade"])
+        _escolha(self.w_bloquear, self.w_bloquear._opcoes, v["bloquear_min"])
+        _escolha(self.w_apagar, self.w_apagar._opcoes, v["apagar_min"])
+        self._mostrar_atalhos(atalhos_do_init())
+
+    def coletar(self):
+        a = self.antes
+        return {
+            "barra_posicao": self._valor_dd(self.w_barra_posicao),
+            "barra_altura": int(self.w_barra_altura.get_value()),
+            "barra_estilo": self._valor_dd(self.w_barra_estilo),
+            "modulos": {m: sw.get_active() for m, sw in self.w_mod.items()},
+            "gtk_tema": self._valor_dd(self.w_gtk) or a["gtk_tema"],
+            "icones": self._valor_dd(self.w_icones) or a["icones"],
+            "cursor": self._valor_dd(self.w_cursor) or a["cursor"],
+            "cursor_tamanho": int(self.w_cursor_tam.get_value()),
+            "destaque": self._valor_dd(self.w_destaque),
+            "borda": int(self.w_borda.get_value()),
+            "espaco": int(self.w_espaco.get_value()),
+            "area_lugar": self._valor_dd(self.w_area_lugar),
+            "area_proporcao": int(self.w_area_prop.get_value()),
+            "foco": self._valor_dd(self.w_foco),
+            "novas": self._valor_dd(self.w_novas),
+            "papel": self._valor_dd(self.w_papel) or a["papel"],
+            "papel_modo": self._valor_dd(self.w_papel_modo),
+            "papel_bloqueio": self.w_papel_bloqueio.get_active(),
+            "teclado": self._valor_dd(self.w_teclado),
+            "repeticao_taxa": int(self.w_rep_taxa.get_value()),
+            "repeticao_atraso": int(self.w_rep_atraso.get_value()),
+            "toque": self.w_toque.get_active(),
+            "rolagem_natural": self.w_rolagem.get_active(),
+            "velocidade": int(self.w_velocidade.get_value()),
+            "bloquear_min": self._valor_dd(self.w_bloquear),
+            "apagar_min": self._valor_dd(self.w_apagar),
+        }
+
+    def recarregar(self):
+        self.antes = valores_atuais()
+        self.mostrar(self.antes)
+        self.status("✔ Pronto." if river_rodando() else
+                    "✔ Pronto — o River não está rodando: as mudanças valem no próximo login.")
+
+    def status(self, texto):
+        self.label_status.set_text(texto)
+        return False
+
+    # ----- botões -----
+
+    def ao_clicar_aplicar(self, *_):
+        v = self.coletar()
+        self.b_aplicar.set_sensitive(False)
+
+        def tarefa():
+            try:
+                feito = aplicar(v, self.antes, lambda t: GLib.idle_add(self.status, t))
+                GLib.idle_add(self._fim, feito, v, None)
+            except Exception as erro:  # noqa: BLE001 - mostra qualquer falha ao usuário
+                GLib.idle_add(self._fim, [], v, str(erro))
+        threading.Thread(target=tarefa, daemon=True).start()
+
+    def _fim(self, feito, v, erro):
+        self.b_aplicar.set_sensitive(True)
+        if erro:
+            self.status(f"⚠️ {erro}")
+        elif not feito:
+            self.status("ℹ️ Nada mudou.")
+        else:
+            self.antes = v
+            quando = "" if river_rodando() else " Vale no próximo login."
+            self.status("✅ Aplicado: " + ", ".join(feito) + "." + quando)
+        return False
+
+    def confirmar_restaurar(self, base):
+        if base == "voidbr":
+            msg = "Restaurar o padrão VoidBR?"
+            detalhe = ("Barra, atalhos, cores, papel de parede, tela de bloqueio e menus voltam "
+                       "ao padrão do VoidBR, e na hora. Os arquivos atuais ficam guardados em "
+                       "~/.voidbr-skel-backup-<data>.")
+        else:
+            msg = "Voltar ao River original?"
+            detalhe = ("O init vira o exemplo do pacote river: sem barra, sem papel de parede, "
+                       "sem bloqueio de tela e com os atalhos originais (Super+Shift+Enter abre "
+                       "o terminal). Vale no próximo login. Para voltar, rode "
+                       "voidbr-river-tweaks --padrao-voidbr no terminal. Os arquivos atuais "
+                       "ficam guardados em ~/.voidbr-skel-backup-<data>.")
+        dlg = Gtk.AlertDialog(message=msg, detail=detalhe, buttons=["Cancelar", "Restaurar"],
+                              cancel_button=0, default_button=1)
+        dlg.choose(self, None, self._resposta_restaurar, base)
+
+    def _resposta_restaurar(self, dlg, res, base):
+        try:
+            if dlg.choose_finish(res) != 1:
+                return
+        except GLib.Error:
+            return
+        for b in (self.b_aplicar, *self.b_restaurar):
+            b.set_sensitive(False)
+
+        def tarefa():
+            try:
+                pasta, agora = restaurar(base, lambda t: GLib.idle_add(self.status, t))
+                GLib.idle_add(self._fim_restaurar, base, pasta, agora, None)
+            except Exception as erro:  # noqa: BLE001 - mostra qualquer falha ao usuário
+                GLib.idle_add(self._fim_restaurar, base, None, False, str(erro))
+        threading.Thread(target=tarefa, daemon=True).start()
+
+    def _fim_restaurar(self, base, pasta, agora, erro):
+        for b in (self.b_aplicar, *self.b_restaurar):
+            b.set_sensitive(True)
+        if erro:
+            self.status(f"⚠️ {erro}")
+            return False
+        nome = "VoidBR" if base == "voidbr" else "River original"
+        self.recarregar()
+        self.status(f"✅ Padrão {nome} restaurado" + (" e aplicado." if agora else
+                                                      "; vale no próximo login.") +
+                    f" Backup em {pasta}.")
+        return False
+
+    def ao_escolher_imagem(self, *_):
+        dlg = Gtk.FileDialog(title="Imagem do papel de parede", modal=True)
+        filtro = Gtk.FileFilter()
+        filtro.set_name("Imagens")
+        for ext in PAPEL_EXT:
+            filtro.add_pattern("*" + ext)
+            filtro.add_pattern("*" + ext.upper())
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dlg.set_filters(filtros)
+        if os.path.isdir(PAPEL_PASTA):
+            dlg.set_initial_folder(Gio.File.new_for_path(PAPEL_PASTA))
+
+        def fim(d, res):
+            try:
+                arq = d.open_finish(res)
+            except GLib.Error:
+                return
+            caminho = arq.get_path()
+            if caminho:
+                _escolha(self.w_papel, self.op_papel, caminho)
+        dlg.open(self, None, fim)
+
+    def ao_editar_init(self, *_):
+        try:
+            Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(RIVER_INIT).get_uri(), None)
+            self.status("ℹ️ Init aberto no editor. Os atalhos novos valem no próximo login.")
+        except GLib.Error as erro:
+            self.status(f"⚠️ Não consegui abrir o editor: {erro.message}")
+
+    # ----- fonte do app -----
+
+    def aplicar_fonte(self):
+        nome = Gtk.Settings.get_default().props.gtk_font_name or ""
+        m = re.search(r"(\d+(?:\.\d+)?)\s*$", nome)
+        base = float(m.group(1)) if m else 11.0
+        s = self.escala_fonte
+        self.css_fonte.load_from_data((
+            f"window, window * {{ font-size: {base * s:.1f}pt; }}\n"
+            f".titulo-app {{ font-size: {20 * s:.0f}px; }}\n"
+            f".subtitulo {{ font-size: {12 * s:.0f}px; }}\n"
+            f".dica {{ font-size: {11 * s:.0f}px; }}\n").encode("utf-8"))
+        for w in Gtk.Window.list_toplevels():
+            w.queue_resize()
+        self.b_escala.set_label(f"{round(s * 100)}%")
+        self.b_menor.set_sensitive(s > ESCALA_MIN + 0.001)
+        self.b_maior.set_sensitive(s < ESCALA_MAX - 0.001)
+
+    def mudar_fonte(self, passo):
+        nova = 1.0 if passo == 0 else round(self.escala_fonte + 0.1 * passo, 2)
+        nova = min(ESCALA_MAX, max(ESCALA_MIN, nova))
+        if nova == self.escala_fonte and passo:
+            return
+        self.escala_fonte = nova
+        self.aplicar_fonte()
+        try:
+            gravar_prefs_app(font_scale=nova)
+        except OSError:
+            pass
+
+    def ao_clicar_sobre(self, *_):
+        sobre = Gtk.AboutDialog(transient_for=self, modal=True)
+        sobre.set_program_name("VoidBR River Tweaks")
+        sobre.set_version(VERSAO)
+        sobre.set_comments("Ajustes do River do VoidBR:\nbarra, aparência, janelas, papel de "
+                           "parede,\nteclado, mouse e energia.")
+        sobre.set_authors(["Vilmar Catafesta <vcatafesta@gmail.com>"])
+        sobre.set_copyright("© 2026 Vilmar Catafesta")
+        sobre.set_website("https://voidbr.org")
+        sobre.set_website_label("voidbr.org")
+        sobre.set_license_type(Gtk.License.BSD)
+        sobre.set_logo_icon_name(APP_ID)
+        sobre.present()
+
+
+class AppTweaks(Gtk.Application):
+    def __init__(self, aba=None):
+        super().__init__(application_id=APP_ID,
+                         flags=getattr(Gio.ApplicationFlags, "DEFAULT_FLAGS",
+                                       Gio.ApplicationFlags.FLAGS_NONE))
+        self.aba = aba
+
+    def do_activate(self):
+        janela = self.props.active_window or JanelaTweaks(self, self.aba)
+        janela.present()
+
+
+def main():
+    args = sys.argv[1:]
+    if "--version" in args:
+        print(f"voidbr-river-tweaks {VERSAO}")
+        return 0
+    if "--help" in args or "-h" in args:
+        print("Uso: voidbr-river-tweaks [--aba barra|aparencia|janelas|papel|teclado|energia]\n"
+              "                           [--padrao-voidbr | --padrao-river]")
+        return 0
+    if "--padrao-voidbr" in args or "--padrao-river" in args:
+        base = "voidbr" if "--padrao-voidbr" in args else "river"
+        pasta, agora = restaurar(base, print)
+        print(f"Padrão {base} restaurado. Backup em {pasta}" +
+              ("" if agora else " (vale no próximo login)"))
+        return 0
+    aba = None
+    if "--aba" in args:
+        i = args.index("--aba")
+        aba = args[i + 1] if i + 1 < len(args) else None
+    return AppTweaks(aba).run([sys.argv[0]])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

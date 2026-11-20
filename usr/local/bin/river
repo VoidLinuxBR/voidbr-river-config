@@ -1,0 +1,12 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Abre o River sempre com sessão D-Bus
+# A entrada "River" do login (Exec=river) acha este script antes do
+# /usr/bin/river, porque /usr/local/bin vem primeiro no PATH (SDDM,
+# greetd com source_profile, TTY). Sem D-Bus não funcionam notificações,
+# bandeja, chaveiro e portais.
+# ====================================================================
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-run-session >/dev/null; then
+	exec dbus-run-session /usr/bin/river "$@"
+fi
+exec /usr/bin/river "$@"

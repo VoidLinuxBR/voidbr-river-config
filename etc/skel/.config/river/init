@@ -1,26 +1,8 @@
 #!/bin/sh
 
-# Ambiente para portais/dbus (GTK, xdg-desktop-portal, notificações)
-dbus-update-activation-environment --all 2>/dev/null ||
-	dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river
-
-# Keyboard layout (ABNT2)
-riverctl keyboard-layout -model abnt2 -variant abnt2 br
-
-# Repetição de teclado
-riverctl set-repeat 50 300
-
-# ---------------------------------------------------------------------------
-# Mouse / touchpad
-# ---------------------------------------------------------------------------
-# libinput vem com tap-to-click DESLIGADO por padrão (só afeta touchpads)
-riverctl input 'pointer-*' tap enabled
-riverctl input 'pointer-*' tap-button-map left-right-middle
-riverctl input 'pointer-*' disable-while-typing enabled
-#riverctl input 'pointer-*' natural-scroll enabled
-
-# Foco segue o cursor (opcional; o padrão do River é clique para focar)
-#riverctl focus-follows-cursor normal
+# Teclado, mouse/touchpad, cursor, bordas e cores: ficam no voidbr-river-apply,
+# que lê os ajustes do VoidBR River Tweaks (~/.config/river/voidbr-tweaks.sh)
+/usr/local/bin/voidbr-river-apply river
 
 # Super + botões do mouse: mover / redimensionar / alternar float
 riverctl map-pointer normal Super BTN_LEFT   move-view
@@ -36,8 +18,14 @@ riverctl map normal Super Return spawn xfce4-terminal
 # Close focused window
 riverctl map normal Super Q close
 
-# Sair do River
-riverctl map normal Super+Shift E exit
+# Menu de energia (sair, suspender, reiniciar, desligar)
+riverctl map normal Super+Shift E spawn 'pkill -x wlogout || wlogout -b 5'
+
+# Bloquear a tela
+riverctl map normal Super L spawn /usr/local/bin/voidbr-river-lock
+
+# Ajustes do River (VoidBR River Tweaks)
+riverctl map normal Super F1 spawn voidbr-river-tweaks
 
 # App launcher
 riverctl map normal Super D spawn fuzzel
@@ -45,11 +33,18 @@ riverctl map normal Super D spawn fuzzel
 # File manager
 riverctl map normal Super E spawn thunar
 
+# Central de notificações
+riverctl map normal Super N spawn 'swaync-client -t -sw'
+
 # Navegação entre janelas
 riverctl map normal Super J focus-view next
 riverctl map normal Super K focus-view previous
 riverctl map normal Super+Shift J swap next
 riverctl map normal Super+Shift K swap previous
+
+# Tamanho da área principal do rivertile
+riverctl map normal Super+Alt H send-layout-cmd rivertile "main-ratio -0.05"
+riverctl map normal Super+Alt L send-layout-cmd rivertile "main-ratio +0.05"
 
 # Float / fullscreen
 riverctl map normal Super Space toggle-float
@@ -62,19 +57,36 @@ for i in $(seq 1 9); do
 	riverctl map normal Super+Shift "$i" set-view-tags "$tags"
 done
 
-# ---------------------------------------------------------------------------
-# Aparência (Tokyo Night)
-# ---------------------------------------------------------------------------
-riverctl background-color 0x1a1b26
-riverctl border-color-focused 0x7aa2f7
-riverctl border-color-unfocused 0x414868
+# Teclas de mídia (funcionam também com a tela bloqueada)
+for mode in normal locked; do
+	riverctl map $mode None XF86AudioRaiseVolume  spawn '/usr/local/bin/voidbr-river-osd volume +'
+	riverctl map $mode None XF86AudioLowerVolume  spawn '/usr/local/bin/voidbr-river-osd volume -'
+	riverctl map $mode None XF86AudioMute         spawn '/usr/local/bin/voidbr-river-osd volume mudo'
+	riverctl map $mode None XF86MonBrightnessUp   spawn '/usr/local/bin/voidbr-river-osd brilho +'
+	riverctl map $mode None XF86MonBrightnessDown spawn '/usr/local/bin/voidbr-river-osd brilho -'
+	riverctl map $mode None XF86AudioPlay  spawn 'playerctl play-pause'
+	riverctl map $mode None XF86AudioPause spawn 'playerctl play-pause'
+	riverctl map $mode None XF86AudioNext  spawn 'playerctl next'
+	riverctl map $mode None XF86AudioPrev  spawn 'playerctl previous'
+done
 
 # ---------------------------------------------------------------------------
-# Barra e layout
+# Regras de janelas
 # ---------------------------------------------------------------------------
-# Barra (Waybar)
-waybar &
+# Diálogos e janelas pequenas abrem flutuando
+riverctl rule-add -app-id 'pavucontrol' float
+riverctl rule-add -app-id 'nm-connection-editor' float
+riverctl rule-add -app-id 'blueman-manager' float
+riverctl rule-add -title 'Picture-in-Picture' float
+
+# ---------------------------------------------------------------------------
+# Sessão e layout
+# ---------------------------------------------------------------------------
+# Papel de parede, barra, notificações, OSD, inatividade, bandeja
+/usr/local/bin/voidbr-river-session &
 
 # Gerador de layout: sem ele o River não arranja as janelas
+# (espaço entre janelas e área principal vêm do VoidBR River Tweaks)
 riverctl default-layout rivertile
-exec rivertile -view-padding 6 -outer-padding 6
+# shellcheck disable=SC2046
+exec rivertile $(/usr/local/bin/voidbr-river-apply args)

@@ -53,6 +53,11 @@ post_install() {
 		log "Finalizando instalação"
 	fi
 
+	# Ícone do tweaks no hicolor: atualiza o cache, se houver
+	if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+		gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+	fi
+
 	# SDDM com greeter em Wayland
 	mkdir -p /etc/sddm.conf.d/
 	tee /etc/sddm.conf.d/wayland.conf >/dev/null <<'EOF'

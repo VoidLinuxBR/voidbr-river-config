@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=VoidBR River Tweaks
+GenericName=Ajustes do River
+Comment=Barra, aparência, janelas, papel de parede, teclado, mouse e energia
+Comment[pt_BR]=Barra, aparência, janelas, papel de parede, teclado, mouse e energia
+Exec=voidbr-river-tweaks
+Icon=org.voidbr.RiverTweaks
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;X-VoidBR-Apps;
+Keywords=river;tweaks;barra;waybar;tema;cursor;papel de parede;wallpaper;teclado;mouse;touchpad;atalhos;energia;bloqueio;
+StartupNotify=true
+StartupWMClass=org.voidbr.RiverTweaks

@@ -7,7 +7,6 @@
   "modules-left": [
     "custom/menu",
     "river/tags",
-    "river/mode",
     "river/window"
   ],
   "modules-center": [
@@ -38,9 +37,6 @@
   "river/tags": {
     "num-tags": 9,
     "hide-vacant": true
-  },
-  "river/mode": {
-    "format": "󰌌 {}"
   },
   "river/window": {
     "format": "{}",
@@ -162,6 +158,6 @@
     "format": " 󰐥 ",
     "tooltip": true,
     "tooltip-format": "Bloquear / Sair / Suspender / Reiniciar / Desligar (Super + Shift + E)",
-    "on-click": "pkill -x wlogout || wlogout -b 5"
+    "on-click": "/usr/local/bin/voidbr-river-power"
   }
 }

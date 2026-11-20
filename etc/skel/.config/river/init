@@ -19,7 +19,7 @@ riverctl map normal Super Return spawn xfce4-terminal
 riverctl map normal Super Q close
 
 # Menu de energia (sair, suspender, reiniciar, desligar)
-riverctl map normal Super+Shift E spawn 'pkill -x wlogout || wlogout -b 5'
+riverctl map normal Super+Shift E spawn /usr/local/bin/voidbr-river-power
 
 # Bloquear a tela
 riverctl map normal Super L spawn /usr/local/bin/voidbr-river-lock

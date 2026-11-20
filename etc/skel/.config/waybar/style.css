@@ -38,7 +38,6 @@ tooltip {
 
 /* Módulos: pílulas */
 #custom-menu,
-#mode,
 #window,
 #clock,
 #mpris,
@@ -104,10 +103,6 @@ tooltip {
     background-color: alpha(@accent, 0.4);
 }
 
-#mode {
-    color: @bg;
-    background: @yellow;
-}
 
 #window {
     color: @fg;

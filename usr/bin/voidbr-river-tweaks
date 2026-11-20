@@ -3,7 +3,7 @@
 #
 #   voidbr-river-tweaks
 #   Created: sex 20 nov 2026 12:14:00 -04
-#   Altered: sex 20 nov 2026 12:37:00 -04
+#   Altered: sex 20 nov 2026 12:45:00 -04
 #
 #   Copyright (c) 2026, Vilmar Catafesta <vcatafesta@gmail.com>
 #   Copyright (c) 2026, VoidLinuxBR Team
@@ -21,6 +21,8 @@
 #     Botões Aplicar, Padrão VoidBR e Padrão River.
 #   - v1.1 (2026-11-20): papel de parede padrão passa a ser o
 #     voidbr-wallpaper.avif (com a marca d'água do VoidBR).
+#   - v1.2 (2026-11-20): atalho do menu de energia passa a ser o
+#     voidbr-river-power (botões do tamanho da tela).
 #
 #   Redistribution and use in source and binary forms, with or without
 #   modification, are permitted provided that the following conditions
@@ -80,7 +82,7 @@ import threading
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib, Gio
 
-VERSAO = "1.1"
+VERSAO = "1.2"
 APP_ID = "org.voidbr.RiverTweaks"
 
 HOME = os.path.expanduser("~")
@@ -193,7 +195,7 @@ ACOES = {
     "toggle-float": "Janela flutuante / encaixada",
     "toggle-fullscreen": "Tela cheia",
     "zoom": "Tornar a janela principal",
-    "spawn pkill -x wlogout || wlogout -b 5": "Menu de energia (sair, desligar…)",
+    "spawn /usr/local/bin/voidbr-river-power": "Menu de energia (sair, desligar…)",
     "spawn swaync-client -t -sw": "Central de notificações",
     "send-layout-cmd rivertile main-ratio -0.05": "Diminuir a área principal",
     "send-layout-cmd rivertile main-ratio +0.05": "Aumentar a área principal",

@@ -1,0 +1,54 @@
+#!/bin/sh
+# ====================================================================
+# VoidBR River - Menu de energia em tela cheia (wlogout)
+# O wlogout só aceita tamanhos em pixels: este script lê a resolução da
+# tela, calcula o tamanho dos botões (~30% da altura) e as margens, e
+# preenche os @MARCADORES@ do ~/.config/wlogout/style.css.
+# Uso: voidbr-river-power [LARGURAxALTURA]
+# Chamado de novo com o menu aberto, fecha o menu.
+# ====================================================================
+pkill -x wlogout && exit 0
+
+CSS_ORIGEM="${XDG_CONFIG_HOME:-$HOME/.config}/wlogout/style.css"
+CSS_TMP="${XDG_RUNTIME_DIR:-/tmp}/voidbr-wlogout.css"
+BOTOES=5
+ESPACO=24
+
+# Resolução: argumento, ou o modo atual da primeira saída conectada
+res="$1"
+if [ -z "$res" ]; then
+	for st in /sys/class/drm/card*-*/status; do
+		[ "$(cat "$st" 2>/dev/null)" = connected ] || continue
+		res=$(head -n 1 "${st%/status}/modes" 2>/dev/null)
+		[ -n "$res" ] && break
+	done
+fi
+largura=${res%%x*}
+altura=${res#*x}
+case "$largura$altura" in
+'' | *[!0-9]*) largura=1920 altura=1080 ;;
+esac
+
+# Botões: ~30% da altura (150 a 340 px), um pouco mais estreitos que altos
+alto=$((altura * 30 / 100))
+[ "$alto" -lt 150 ] && alto=150
+[ "$alto" -gt 340 ] && alto=340
+largo=$((alto * 85 / 100))
+# Não cabe na largura (tela estreita/vertical): encolhe
+max=$(((largura * 90 / 100 - (BOTOES - 1) * ESPACO) / BOTOES))
+if [ "$largo" -gt "$max" ]; then
+	largo=$max
+	alto=$((largo * 100 / 85))
+fi
+
+lados=$(((largura - BOTOES * largo - (BOTOES - 1) * ESPACO) / 2))
+cima=$(((altura - alto) / 2))
+icone=$((largo * 38 / 100))
+icone_y=$((alto * 18 / 100))
+texto=$((alto * 52 / 100))
+
+sed -e "s/@ICONE@/${icone}/g" -e "s/@ICONE_Y@/${icone_y}/g" -e "s/@TEXTO@/${texto}/g" \
+	"$CSS_ORIGEM" >"$CSS_TMP"
+
+exec wlogout -C "$CSS_TMP" -b "$BOTOES" -c "$ESPACO" \
+	-T "$cima" -B "$cima" -L "$lados" -R "$lados"

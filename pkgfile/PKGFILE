@@ -58,13 +58,8 @@ post_install() {
 		gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
 	fi
 
-	# SDDM com greeter em Wayland
-	mkdir -p /etc/sddm.conf.d/
-	tee /etc/sddm.conf.d/wayland.conf >/dev/null <<'EOF'
-[General]
-#CompositorCommand=weston --shell=kiosk
-DisplayServer=wayland
-EOF
+	# O /etc/sddm.conf.d/wayland.conf (greeter do SDDM em Wayland, compositor
+	# sway) é do voidbr-sddm-themes; este pacote não mexe mais nele.
 
 	# Build da ISO e instalador: o skel vai para o usuário criado depois
 	if [ -n "${MKISO_BUILD:-}" ] || [ -n "${VOIDBR_INSTALLER:-}" ]; then
